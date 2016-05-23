@@ -304,10 +304,6 @@ class DaeExporter:
 			mesh = node.to_mesh(self.scene, apply_modifiers, "RENDER")  # is this allright?
 		except:
 			return None
-
-		if (triangulate or (apply_modifiers and len(node.modifiers))):
-			mesh = node.to_mesh(self.scene, apply_modifiers, "RENDER")  # is this allright?
-
 				
 		if not len(mesh.polygons):
 			# mesh has no polygons so abort
