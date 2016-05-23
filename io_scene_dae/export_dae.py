@@ -566,7 +566,7 @@ class DaeExporter:
 		bone_weights=[i for w in
 					 [
 					 	[g.group,weights_index[g.weight]] 
-					 		for v in node.data.vertices for g in v.groups if abs(g.weight) >0.000001
+					 		for v in node.data.vertices for g in v.groups
 					 ] 
 					for i in w]
 		
