@@ -19,16 +19,16 @@
 # <pep8-80 compliant>
 
 bl_info = {
-    "name": "Better Collada Exporter",
-    "author": "Juan Linietsky",
+    "name": "Python Collada Exporter",
+    "author": "Gregery Barton",
     "blender": (2, 5, 8),
     "api": 38691,
     "location": "File > Import-Export",
-    "description": ("Export DAE Scenes, This plugin actually works better! otherwise contact me."),
+    "description": ("Export DAE Scenes. "),
     "warning": "",
-    "wiki_url": ("http://www.godotengine.org"),
+    "wiki_url": ("https://github.com/GWxPLym4F6V/Blender-Collada"),
     "tracker_url": "",
-    "support": 'OFFICIAL',
+    "support": 'UNOFFICIAL',
     "category": "Import-Export"}
 
 
@@ -83,11 +83,11 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
             description="Apply modifiers to mesh objects (on a copy!).",
 	    default=False,
             )
-    use_tangent_arrays = BoolProperty(
-	    name="Tangent Arrays",
-	    description="Export Tangent and Binormal arrays (for normalmapping).",
-	    default=False,
-	    )
+    #use_tangent_arrays = BoolProperty(
+	 #   name="Tangent Arrays",
+	  #  description="Export Tangent and Binormal arrays (for normalmapping).",
+	   # default=False,
+	    #)
     use_triangles = BoolProperty(
 	    name="Triangulate",
 	    description="Export Triangles instead of Polygons.",
@@ -119,26 +119,6 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
 	    description="Skip exporting of actions whose name end in (-noexp). Useful to skip control animations.",
 	    default=True,
 	    )
-    use_anim_optimize = BoolProperty(
-            name="Optimize Keyframes",
-            description="Remove double keyframes",
-            default=True,
-            )
-
-    anim_optimize_precision = FloatProperty(
-            name="Precision",
-            description=("Tolerence for comparing double keyframes "
-                        "(higher for greater accuracy)"),
-            min=1, max=16,
-            soft_min=1, soft_max=16,
-            default=6.0,
-            )
-
-    use_metadata = BoolProperty(
-            name="Use Metadata",
-            default=True,
-            options={'HIDDEN'},
-            )
 
     @property
     def check_extension(self):
@@ -175,7 +155,7 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
 
 
 def menu_func(self, context):
-    self.layout.operator(ExportDAE.bl_idname, text="Better Collada (.dae)")
+    self.layout.operator(ExportDAE.bl_idname, text="Export Collada (.dae)")
 
 
 def register():

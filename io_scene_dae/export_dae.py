@@ -15,13 +15,17 @@
 #  Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 #
 # ##### END GPL LICENSE BLOCK #####
+from bpy_types import Node
+from platform import node
+from mesh_inset.offset import Offset
+import nodeitems_utils
 
 # <pep8 compliant>
 #
 # Author: Gregery Barton
 # Contact: gregery20@yahoo.com.au
 #
-# Derived from original: 
+# Originally authored by: 
 # Script copyright (C) Juan Linietsky
 # Contact Info: juan@codenix.com
 #
@@ -50,7 +54,7 @@ import math  # math.pi
 import shutil
 import bpy
 import bmesh
-from mathutils import Vector, Matrix
+from mathutils import Vector, Matrix,Euler
 import itertools
 import string
  
@@ -81,20 +85,7 @@ def snap_tup(tup):
 
 
 def strmtx(mtx):
-	s = " "
-	for x in range(4):
-		for y in range(4):
-			s += str(mtx[x][y])
-			s += " "
-	s += " "
-	return s
-
-def numarr(a, mult=1.0):
-	s = " "
-	for x in a:
-		s += " " + str(x * mult)
-	s += " "
-	return s
+	return " ".join([str(e) for v in mtx for e in v])
 
 def numarr_alpha(a, mult=1.0):
 	s = " "
@@ -114,73 +105,24 @@ def strarr(arr):
 
 class DaeExporter:
 
-	def validate_id(self, d):
-		if (d.find("id-") == 0):
-			return "z" + d
-		return d
-
-
 	def new_id(self, t):
 		self.last_id += 1
 		return "id-" + t + "-" + str(self.last_id)
 
 	def sanatize_id(self, name):
-		return "_".join( name.split())
-
-	class Vertex:
-
-		def close_to(v):
-			if ((self.vertex - v.vertex).length() > CMP_EPSILON):
-				return False
-			if ((self.normal - v.normal).length() > CMP_EPSILON):
-				return False
-			if ((self.uv - v.uv).length() > CMP_EPSILON):
-				return False
-			if ((self.uv2 - v.uv2).length() > CMP_EPSILON):
-				return False
-
-			return True
-
-		def get_tup(self):
-			tup = (self.vertex.x, self.vertex.y, self.vertex.z, self.normal.x, self.normal.y, self.normal.z)
-			for t in self.uv:
-				tup = tup + (t.x, t.y)
-			if (self.color != None):
-				tup = tup + (self.color.x, self.color.y, self.color.z)
-			if (self.tangent != None):
-				tup = tup + (self.tangent.x, self.tangent.y, self.tangent.z)
-			if (self.bitangent != None):
-				tup = tup + (self.bitangent.x, self.bitangent.y, self.bitangent.z)
-			for t in self.bones:
-				tup = tup + (float(t),)
-			for t in self.weights:
-				tup = tup + (float(t),)
-
-			return tup
-
-		def __init__(self):
-			self.vertex = Vector((0.0, 0.0, 0.0))
-			self.normal = Vector((0.0, 0.0, 0.0))
-			self.tangent = None
-			self.bitangent = None
-			self.color = None
-			self.uv = []
-			self.uv2 = Vector((0.0, 0.0))
-			self.bones = []
-			self.weights = []
-
+		return "_".join(name.split())
 
 	def writel(self, section, indent, text):
 		if (not (section in self.sections)):
 			self.sections[section] = []
 		line = ""
 		for x in range(indent):
-			line += "\t"
+			line += " "
 		line += text
 		self.sections[section].append(line)
 
 
-	def export_image(self, image,image_id):
+	def export_image(self, image, image_id):
 		imgpath = image.filepath
 		if (imgpath.find("//") == 0 or imgpath.find("\\\\") == 0):
 			# if relative, convert to absolute
@@ -229,9 +171,9 @@ class DaeExporter:
 		self.writel(S_IMGS, 2, '<init_from>' + imgpath + '</init_from>')
 		self.writel(S_IMGS, 1, '</image>')
 
-	def export_effect(self, material,effect_id,image_lookup):
+	def export_effect(self, material, effect_id, image_lookup):
 
-		self.writel(S_FX, 1, '<effect id="' + effect_id + '" name="' + material.name +">'")
+		self.writel(S_FX, 1, '<effect id="' + effect_id + '" name="' + material.name + '">')
 		self.writel(S_FX, 2, '<profile_COMMON>')
 
 		# Find and fetch the textures and create sources
@@ -240,11 +182,15 @@ class DaeExporter:
 		specular_tex = None
 		emission_tex = None
 		normal_tex = None
+		
+		done_images=set()
 		for i in range(len(material.texture_slots)):
 			ts = material.texture_slots[i]
 			if (not ts):
 				continue
 			if (not ts.texture):
+				continue
+			if (not hasattr(ts.texture, "image")):
 				continue
 			if (ts.texture.image == None):
 				continue
@@ -253,10 +199,13 @@ class DaeExporter:
 			imgid = image_lookup[ts.texture.image.name]
 			if (not imgid):
 				continue
+			if (imgid in done_images):
+				continue
+			done_images.add(imgid)
 
 			
 			# surface
-			surface_sid = imgid+"-surface"
+			surface_sid = imgid + "-surface"
 			self.writel(S_FX, 3, '<newparam sid="' + surface_sid + '">')
 			self.writel(S_FX, 4, '<surface type="2D">')
 			self.writel(S_FX, 5, '<init_from>' + imgid + '</init_from>')  # this is sooo weird
@@ -264,7 +213,7 @@ class DaeExporter:
 			self.writel(S_FX, 4, '</surface>')
 			self.writel(S_FX, 3, '</newparam>')
 			# sampler, collada sure likes it difficult
-			sampler_sid = imgid+"-sampler"
+			sampler_sid = imgid + "-sampler"
 			self.writel(S_FX, 3, '<newparam sid="' + sampler_sid + '">')
 			self.writel(S_FX, 4, '<sampler2D>')
 			self.writel(S_FX, 5, '<source>' + surface_sid + '</source>')
@@ -337,36 +286,191 @@ class DaeExporter:
 			self.writel(S_FX, 7, '<texture texture="' + normal_tex + '" texcoord="CHANNEL1"/>')
 			self.writel(S_FX, 6, '</bump>')
 
-#		self.writel(S_FX, 5, '</technique>')
+# 		self.writel(S_FX, 5, '</technique>')
 # 		self.writel(S_FX,5,'<technique profile="GOOGLEEARTH">')
 # 		self.writel(S_FX,6,'<double_sided>'+["0","1"][double_sided_hint]+"</double_sided>")
-# 		self.writel(S_FX,5,'</technique>')
-#		self.writel(S_FX, 4, '</extra>')
+		self.writel(S_FX,5,'</technique>')
+		self.writel(S_FX, 4, '</extra>')
 
 		self.writel(S_FX, 3, '</technique>')
 		self.writel(S_FX, 2, '</profile_COMMON>')
 		self.writel(S_FX, 1, '</effect>')
 
+	def node_to_mesh(self, node, triangulate):
+		apply_modifiers = len(node.modifiers) and self.config["use_mesh_modifiers"]
 	
-	def export_mesh(self, node, armature=None, skeyindex=-1, skel_source=None, custom_name=None):
+			# get a mesh for this node
+		try:
+			mesh = node.to_mesh(self.scene, apply_modifiers, "RENDER")  # is this allright?
+		except:
+			return None
 
+		if (triangulate or (apply_modifiers and len(node.modifiers))):
+			mesh = node.to_mesh(self.scene, apply_modifiers, "RENDER")  # is this allright?
+
+				
+		if not len(mesh.polygons):
+			# mesh has no polygons so abort
+			if mesh != node.data: 
+				bpy.data.meshes.remove(mesh)
+			return False
+
+		self.calculate_tangents(mesh)
+		
+		if (triangulate):
+			bm = bmesh.new()
+			bm.from_mesh(mesh)
+			bmesh.ops.triangulate(bm, faces=bm.faces)
+			bm.to_mesh(mesh)
+			bm.free()
+			mesh.update(calc_tessface=True)
+		
+		if (mesh != node.data):
+			self.meshes_to_clear.append(mesh)		
+		return mesh
+		
+	def calculate_tangents(self, mesh):
+		#use_tangents = self.config["use_tangent_arrays"]  # could detect..
+		use_tangents=False
+		if (use_tangents and len(mesh.uv_textures)):
+			try:
+				mesh.calc_tangents()
+				return True 
+			except:
+		#		self.operator.report({'WARNING'}, 'CalcTangets failed for mesh "' + mesh.name + '", no tangets will be exported.')
+				mesh.calc_normals_split()
+				return False
+		else:
+			mesh.calc_normals_split()
+			return False
+
+	def get_mesh_surfaces(self, node, mesh):
+		
+		#get vertices
+		vertices=[Vector(v.co) for v in mesh.vertices.values()]
+		
+
+		# get polygons
+		loop_vertices,materials=self.get_polygon_groups(mesh)
+
+		# convert dictionary of loop vertices to dictionary of vertex indices
+		surface_v_indices = {g:s for (g,s) in 
+							zip(loop_vertices.keys(),
+										[[[v[1].vertex_index for v in p] for p in g] for g in loop_vertices.values()])}
+		
+		# convert dictionary of loop vertices to a flat list of normals, removing duplicates
+		normals = list(set([v[1].normal.freeze() for g in loop_vertices.values() for s in g for v in s]))
+		normals_map={k:v for (v,k) in enumerate(normals)}
+		
+		# convert dictionary of loop vertices to a dictionary of normal indices
+		surface_normal_indices = {g:s for (g,s) in 
+							zip(loop_vertices.keys(),
+										[[[normals_map[v[1].normal.freeze()] for v in p] for p in g] for g in loop_vertices.values()])}
+		
+		# get uv's
+		if (mesh.uv_layers!=None) and (mesh.uv_layers.active!=None):
+			uv_layer = mesh.uv_layers.active.data
+		else:
+			uv_layer=None
+		
+		uv=[]
+		if (uv_layer!=None):
+			# get all uv values, removing duplicates
+			uv=list(set([uv.uv.freeze() for uv in uv_layer.values()]))
+
+		surface_uv_indices={}
+		if (len(uv)):
+			uv_map={k:v for (v,k) in enumerate(uv)}
+			# convert dictionary of loop vertices into a dictionary of uv indices (into the uv list)
+			surface_uv_indices = {g:s for (g,s) in 
+							zip(loop_vertices.keys(),
+										[[[uv_map[uv_layer[v[0]].uv.freeze()] for v in p] for p in g] for g in loop_vertices.values()])}
+
+		# colors are aligned with vertices
+		colors=[]
+		if (mesh.vertex_colors != None):
+			colors=[color.co for color in mesh.vertex_colors.values()]
+			
+		return vertices, normals,uv,colors, surface_v_indices,surface_normal_indices, surface_uv_indices,materials
+	
+	def get_polygon_groups(self,mesh):
+		# get a dictionary of polygons with loop vertices grouped by material
+		vertices = {}
+		
+		# get the material for each corresponding dictionary entry in vertices
+		materials={}
+		
+		for fi in range(len(mesh.polygons)):
+			f = mesh.polygons[fi]
+
+			# group by material index, retrieve the materials for each group
+			
+			if (not (f.material_index in vertices)):
+				vertices[f.material_index] = []
+				
+				if (len(mesh.materials)):
+					mat = mesh.materials[f.material_index]
+				else:
+					mat=None
+					
+				if (mat != None):
+					materials[f.material_index] = mat.name
+				else:
+					materials[f.material_index] = None  # weird, has no material?
+
+			loop_vertices = vertices[f.material_index]
+
+			polygon=[]
+			# output polygon indices
+			for lt in range(f.loop_total):
+				loop_index = f.loop_start + lt
+				ml = mesh.loops[loop_index]
+				polygon.append([loop_index,ml])
+				
+			loop_vertices.append(polygon)
+		
+		return	vertices,materials
+		
+	def export_meshes(self):
+		meshes = 	set(
+			filter(lambda obj :	obj.type == "MESH" or obj.type == "CURVE", 	self.valid_nodes)
+		);
+			
+		geometry_lookup = {}
+		geometry_morphs = {}
+		material_bind_lookup={}
+		for mesh in meshes:
+			if (not mesh.data.name in geometry_lookup):
+				mesh_id = mesh.data.name + "-mesh"
+				geometry_lookup[mesh.data.name] = mesh_id
+				valid,material_bind=self.export_mesh(mesh, mesh_id)
+				if (valid):
+					material_bind_lookup[mesh.data.name]=material_bind
+					morphs = self.export_mesh_morphs(mesh, mesh_id)
+					if (morphs):
+						geometry_morphs[mesh.data.name] = morphs
+				else:
+					if(mesh.type == "CURVE"):
+						self.export_curve(mesh.data,mesh_id)
+
+		return geometry_lookup, geometry_morphs,material_bind_lookup
+	
+	def export_mesh_morphs(self, node, mesh_id):
 		mesh = node.data
 
-
-		if (node.data in self.mesh_cache):
-			return self.mesh_cache[mesh]
-
-		if (skeyindex == -1 and mesh.shape_keys != None and len(mesh.shape_keys.key_blocks)):
+		if (mesh.shape_keys != None and len(mesh.shape_keys.key_blocks)):
 			values = []
 			morph_targets = []
 			md = None
 			for k in range(0, len(mesh.shape_keys.key_blocks)):
-			    shape = node.data.shape_keys.key_blocks[k]
-			    values += [shape.value]  # save value
-			    shape.value = 0
-
+				shape = node.data.shape_keys.key_blocks[k]
+				values += [shape.value]  # save value
+				shape.value = 0
+			
+			scene_show_only_shape_key=node.show_only_shape_key
+			scene_active_shape_key=node.active_shape_key_index 
+			
 			mid = self.new_id("morph")
-
 			for k in range(0, len(mesh.shape_keys.key_blocks)):
 
 				shape = node.data.shape_keys.key_blocks[k]
@@ -374,266 +478,177 @@ class DaeExporter:
 				node.active_shape_key_index = k
 				shape.value = 1.0
 				mesh.update()
-				"""
-				oldval = shape.value
-				shape.value = 1.0
+				morph_id=mesh_id+"_morph_Key_"+str(k)
+				morph_targets.append(morph_id)
+				self.export_mesh(node, morph_id)
+				shape.value = values[k]
+			
+			node.show_only_shape_key=scene_show_only_shape_key
+			node.active_shape_key_index=scene_active_shape_key
+			mesh.update
+			
+			return morph_targets
+		else:	
+				return None;
+	
+	def export_morph_controllers(self,mesh_lookup,geometry_morphs):
+		morph_lookup={}
+		for mesh_name,targets in geometry_morphs.items():
+			morph_id=mesh_name+"-morph"
+			morph_lookup[mesh_name]=morph_id
+			mesh_id=mesh_lookup[mesh_name]
+			self.export_morph_controller(mesh_id, targets, morph_id)
+		return morph_lookup
+		
+	def export_morph_controller(self,mesh_id,morph_targets,morph_id):
+			self.writel(S_MORPH,1,'<controller id="'+morph_id+'" name="'+morph_id+'">')
+			self.writel(S_MORPH,2,'<morph source="#'+mesh_id+'" method="NORMALIZED">')
 
-				"""
-				p = node.data
-				v = node.to_mesh(bpy.context.scene, True, "RENDER")
-				node.data = v
-# 				self.export_node(node,il,shape.name)
-				node.data.update()
-				if (armature and k == 0):
-					md = self.export_mesh(node, armature, k, mid, shape.name)
-				else:
-					md = self.export_mesh(node, None, k, None, shape.name)
+			self.writel(S_MORPH,3,'<source id="'+morph_id+'-morph-targets">')
+			self.writel(S_MORPH,4,'<IDREF_array id="'+morph_id+'-morph-targets-array" count="'+str(len(morph_targets))+'">')
+			marr=" ".join(morph_targets)  
+			warr=" ".join([str(0) for i in range(len(morph_targets))])
 
-				node.data = p
-				node.data.update()
-				shape.value = 0.0
-				morph_targets.append(md)
+			self.writel(S_MORPH,5,marr)
+			self.writel(S_MORPH,4,'</IDREF_array>')
+			self.writel(S_MORPH,4,'<technique_common>')
+			self.writel(S_MORPH,5,'<accessor source="#'+morph_id+'-targets-array" count="'+str(len(morph_targets))+'" stride="1">')
+			self.writel(S_MORPH,6,'<param name="MORPH_TARGET" type="IDREF"/>')
+			self.writel(S_MORPH,5,'</accessor>')
+			self.writel(S_MORPH,4,'</technique_common>')
+			self.writel(S_MORPH,3,'</source>')
 
-				"""
-				shape.value = oldval
-				"""
-			node.show_only_shape_key = False
-			node.active_shape_key_index = 0
+			self.writel(S_MORPH,3,'<source id="'+morph_id+'-morph-weights">')
+			self.writel(S_MORPH,4,'<float_array id="'+morph_id+'-weights-array" count="'+str(len(morph_targets))+'" >')
+			self.writel(S_MORPH,5,warr)
+			self.writel(S_MORPH,4,'</float_array>')
+			self.writel(S_MORPH,4,'<technique_common>')
+			self.writel(S_MORPH,5,'<accessor source="#'+morph_id+'-weights-array" count="'+str(len(morph_targets))+'" stride="1">')
+			self.writel(S_MORPH,6,'<param name="MORPH_WEIGHT" type="float"/>')
+			self.writel(S_MORPH,5,'</accessor>')
+			self.writel(S_MORPH,4,'</technique_common>')
+			self.writel(S_MORPH,3,'</source>')
+
+			self.writel(S_MORPH,3,'<targets>')
+			self.writel(S_MORPH,4,'<input semantic="MORPH_TARGET" source="#'+morph_id+'-morph-targets"/>')
+			self.writel(S_MORPH,4,'<input semantic="MORPH_WEIGHT" source="#'+morph_id+'-morph-weights"/>')
+			self.writel(S_MORPH,3,'</targets>')
+			self.writel(S_MORPH,2,'</morph>')
+			self.writel(S_MORPH,1,'</controller>')
+
+	def export_skin_controllers(self,mesh_lookup,morph_lookup):
+		meshes = 	set(
+			filter(lambda obj : (obj.type == "MESH") and (obj.data.name in mesh_lookup.keys()), self.valid_nodes)
+		);
+		
+		skin_controller_lookup={}
+		
+		for node in meshes:
+			if not node.data.name in skin_controller_lookup.keys():
+				armatures = [mod for mod in node.modifiers.values() if (mod.type=="ARMATURE") and mod.use_vertex_groups]
+				for armature in armatures:
+					skin_id=node.data.name+"_"+armature.object.name+"-skin"
+					if (node.data.name in skin_controller_lookup):
+						skin_controller_lookup[node.data.name].append(skin_id)
+					else:
+						skin_controller_lookup[node.data.name]=skin_id
+					if (node.data.name in morph_lookup):
+						mesh_id=morph_lookup(node.data.name)
+					else:
+						mesh_id=mesh_lookup[node.data.name]
+					self.export_skin_controller(node, armature.object, mesh_id , skin_id)
+		return skin_controller_lookup	
+		
+		
+	def export_skin_controller(self,node,armature,mesh_id,skin_id):
+		group_names=[group.name for group in node.vertex_groups.values()]
+		bones=[armature.data.bones[name] for name in group_names]
+		pose_matrices=[(armature.matrix_world * bone.matrix_local).inverted() for bone in bones]
+		weight_counts=[len(v.groups) for v in node.data.vertices]
+		weights=list(set([group.weight for v in node.data.vertices for group in v.groups]))
+		weights_index={k:v for (v,k) in enumerate(weights)}
+		bone_weights=[i for w in
+					 [
+					 	[g.group,weights_index[g.weight]] 
+					 		for v in node.data.vertices for g in v.groups if abs(g.weight) >0.000001
+					 ] 
+					for i in w]
+		
+		self.writel(S_SKIN,1,'<controller id="'+skin_id+'">')
+		self.writel(S_SKIN,2,'<skin source="#'+mesh_id+'">')
+		self.writel(S_SKIN,3,'<bind_shape_matrix>'+strmtx(node.matrix_world)+'</bind_shape_matrix>')
+		#Joint Names
+		self.writel(S_SKIN,3,'<source id="'+skin_id+'-joints">')
+		name_values = " ".join(group_names)
+		self.writel(S_SKIN,4,'<Name_array id="'+skin_id+'-joints-array" count="'+str(len(group_names))+'">'+name_values+'</Name_array>')
+		self.writel(S_SKIN,4,'<technique_common>')
+		self.writel(S_SKIN,4,'<accessor source="#'+skin_id+'-joints-array" count="'+str(len(group_names))+'" stride="1">')
+		self.writel(S_SKIN,5,'<param name="JOINT" type="Name"/>')
+		self.writel(S_SKIN,4,'</accessor>')
+		self.writel(S_SKIN,4,'</technique_common>')
+		self.writel(S_SKIN,3,'</source>')
+
+		#Pose Matrices!
+		
+		self.writel(S_SKIN,3,'<source id="'+skin_id+'-bind_poses">')
+		
+		pose_values = " ".join([strmtx(matrix) for matrix in pose_matrices])
+		self.writel(S_SKIN,4,'<float_array id="'+skin_id+'-bind_poses-array" count="'+str(len(pose_matrices)*16)+'">'+pose_values+'</float_array>')
+		self.writel(S_SKIN,4,'<technique_common>')
+		self.writel(S_SKIN,4,'<accessor source="#'+skin_id+'-bind_poses-array" count="'+str(len(pose_matrices))+'" stride="16">')
+		self.writel(S_SKIN,5,'<param name="TRANSFORM" type="float4x4"/>')
+		self.writel(S_SKIN,4,'</accessor>')
+		self.writel(S_SKIN,4,'</technique_common>')
+		self.writel(S_SKIN,3,'</source>')
+
+		#Skin Weights!
+		self.writel(S_SKIN,3,'<source id="'+skin_id+'-weights">')
+		self.writel(S_SKIN,4,'<float_array id="'+skin_id+'-weights-array" count="'+str(len(weights))+'">'+" ".join([str(w) for w in weights])+'</float_array>')
+		self.writel(S_SKIN,4,'<technique_common>')
+		self.writel(S_SKIN,4,'<accessor source="#'+skin_id+'-weights-array" count="'+str(len(weights))+'" stride="1">')
+		self.writel(S_SKIN,5,'<param name="WEIGHT" type="float"/>')
+		self.writel(S_SKIN,4,'</accessor>')
+		self.writel(S_SKIN,4,'</technique_common>')
+		self.writel(S_SKIN,3,'</source>')
 
 
-			self.writel(S_MORPH, 1, '<controller id="' + mid + '" name="">')
-			# if ("skin_id" in morph_targets[0]):
-			# 	self.writel(S_MORPH,2,'<morph source="#'+morph_targets[0]["skin_id"]+'" method="NORMALIZED">')
-			# else:
-			self.writel(S_MORPH, 2, '<morph source="#' + morph_targets[0]["id"] + '" method="NORMALIZED">')
+		self.writel(S_SKIN,3,'<joints>')
+		self.writel(S_SKIN,4,'<input semantic="JOINT" source="#'+skin_id+'-joints"/>')
+		self.writel(S_SKIN,4,'<input semantic="INV_BIND_MATRIX" source="#'+skin_id+'-bind_poses"/>')
+		self.writel(S_SKIN,3,'</joints>')
+		self.writel(S_SKIN,3,'<vertex_weights count="'+str(len(weight_counts))+'">')
+		self.writel(S_SKIN,4,'<input semantic="JOINT" source="#'+skin_id+'-joints" offset="0"/>')
+		self.writel(S_SKIN,4,'<input semantic="WEIGHT" source="#'+skin_id+'-weights" offset="1"/>')
+		self.writel(S_SKIN,4,'<vcount>'+" ".join([str(c) for c in weight_counts])+'</vcount>')
+		self.writel(S_SKIN,4,'<v>'+" ".join([str(i) for i in bone_weights])+'</v>')
+		self.writel(S_SKIN,3,'</vertex_weights>')
+		self.writel(S_SKIN,2,'</skin>')
+		self.writel(S_SKIN,1,'</controller>')
 
-			self.writel(S_MORPH, 3, '<source id="' + mid + '-morph-targets">')
-			self.writel(S_MORPH, 4, '<IDREF_array id="' + mid + '-morph-targets-array" count="' + str(len(morph_targets) - 1) + '">')
-			marr = ""
-			warr = ""
-			for i in range(len(morph_targets)):
-				if (i == 0):
-				    continue
-				elif (i > 1):
-					marr += " "
-
-				if ("skin_id" in morph_targets[i]):
-					marr += morph_targets[i]["skin_id"]
-				else:
-					marr += morph_targets[i]["id"]
-
-				warr += " 0"
-
-			self.writel(S_MORPH, 5, marr)
-			self.writel(S_MORPH, 4, '</IDREF_array>')
-			self.writel(S_MORPH, 4, '<technique_common>')
-			self.writel(S_MORPH, 5, '<accessor source="#' + mid + '-morph-targets-array" count="' + str(len(morph_targets) - 1) + '" stride="1">')
-			self.writel(S_MORPH, 6, '<param name="MORPH_TARGET" type="IDREF"/>')
-			self.writel(S_MORPH, 5, '</accessor>')
-			self.writel(S_MORPH, 4, '</technique_common>')
-			self.writel(S_MORPH, 3, '</source>')
-
-			self.writel(S_MORPH, 3, '<source id="' + mid + '-morph-weights">')
-			self.writel(S_MORPH, 4, '<float_array id="' + mid + '-morph-weights-array" count="' + str(len(morph_targets) - 1) + '" >')
-			self.writel(S_MORPH, 5, warr)
-			self.writel(S_MORPH, 4, '</float_array>')
-			self.writel(S_MORPH, 4, '<technique_common>')
-			self.writel(S_MORPH, 5, '<accessor source="#' + mid + '-morph-weights-array" count="' + str(len(morph_targets) - 1) + '" stride="1">')
-			self.writel(S_MORPH, 6, '<param name="MORPH_WEIGHT" type="float"/>')
-			self.writel(S_MORPH, 5, '</accessor>')
-			self.writel(S_MORPH, 4, '</technique_common>')
-			self.writel(S_MORPH, 3, '</source>')
-
-			self.writel(S_MORPH, 3, '<targets>')
-			self.writel(S_MORPH, 4, '<input semantic="MORPH_TARGET" source="#' + mid + '-morph-targets"/>')
-			self.writel(S_MORPH, 4, '<input semantic="MORPH_WEIGHT" source="#' + mid + '-morph-weights"/>')
-			self.writel(S_MORPH, 3, '</targets>')
-			self.writel(S_MORPH, 2, '</morph>')
-			self.writel(S_MORPH, 1, '</controller>')
-			if (armature != None):
-
-				self.armature_for_morph[node] = armature
-
-			meshdata = {}
-			if (armature):
-				meshdata = morph_targets[0]
-				meshdata["morph_id"] = mid
-			else:
-				meshdata["id"] = morph_targets[0]["id"]
-				meshdata["morph_id"] = mid
-				meshdata["material_assign"] = morph_targets[0]["material_assign"]
-
-
-
-			self.mesh_cache[node.data] = meshdata
-			return meshdata
-
-		apply_modifiers = len(node.modifiers) and self.config["use_mesh_modifiers"]
-
-		name_to_use = mesh.name
-		# print("name to use: "+mesh.name)
-		if (custom_name != None and custom_name != ""):
-			name_to_use = custom_name
-
-		mesh = node.to_mesh(self.scene, apply_modifiers, "RENDER")  # is this allright?
+	def export_mesh(self, node, mesh_id):
 
 		triangulate = self.config["use_triangles"]
-		if (triangulate):
-			bm = bmesh.new()
-			bm.from_mesh(mesh)
-			bmesh.ops.triangulate(bm, faces=bm.faces)
-			bm.to_mesh(mesh)
-			bm.free()
+		mesh = self.node_to_mesh(node, triangulate)
+		if (not mesh):
+			return False,None
 
-		mesh.update(calc_tessface=True)
-		vertices = []
-		vertex_map = {}
-		surface_indices = {}
-		materials = {}
-
-		si = None
-		if (armature != None):
-			si = self.skeleton_info[armature]
-
-		has_uv = False
-		has_uv2 = False
-		has_weights = armature != None
-		has_tangents = self.config["use_tangent_arrays"]  # could detect..
-		has_colors = len(mesh.vertex_colors)
-		mat_assign = []
-
-		uv_layer_count = len(mesh.uv_textures)
-		if (has_tangents and len(mesh.uv_textures)):
-			try:
-				mesh.calc_tangents()
-			except:
-				self.operator.report({'WARNING'}, 'CalcTangets failed for mesh "' + mesh.name + '", no tangets will be exported.')
-				# uv_layer_count=0
-				mesh.calc_normals_split()
-				has_tangents = False
-
-		else:
-			mesh.calc_normals_split()
-			has_tangents = False
-
-
-		for fi in range(len(mesh.polygons)):
-			f = mesh.polygons[fi]
-
-			if (not (f.material_index in surface_indices)):
-				surface_indices[f.material_index] = []
-				# print("Type: "+str(type(f.material_index)))
-				# print("IDX: "+str(f.material_index)+"/"+str(len(mesh.materials)))
-
-				mat = mesh.materials[f.material_index]
-
-				if (mat != None):
-					materials[f.material_index] = mat.name
-				else:
-					materials[f.material_index] = None  # weird, has no material?
-
-			indices = surface_indices[f.material_index]
-			vi = []
-			# vertices always 3
-			"""
-			if (len(f.vertices)==3):
-				vi.append(0)
-				vi.append(1)
-				vi.append(2)
-			elif (len(f.vertices)==4):
-				#todo, should use shortest path
-				vi.append(0)
-				vi.append(1)
-				vi.append(2)
-				vi.append(0)
-				vi.append(2)
-				vi.append(3)
-			"""
-
-			for lt in range(f.loop_total):
-				loop_index = f.loop_start + lt
-				ml = mesh.loops[loop_index]
-				mv = mesh.vertices[ml.vertex_index]
-
-				v = self.Vertex()
-				v.vertex = Vector(mv.co)
-
-				for xt in mesh.uv_layers:
-					v.uv.append(Vector(xt.data[loop_index].uv))
-
-				if (has_colors):
-					v.color = Vector(mesh.vertex_colors[0].data[loop_index].color)
-
-				v.normal = Vector(ml.normal)
-
-				if (has_tangents):
-					v.tangent = Vector(ml.tangent)
-					v.bitangent = Vector(ml.bitangent)
-
-
-			       # if (armature):
-			       #         v.vertex = node.matrix_world * v.vertex
-
-				# v.color=Vertex(mv. ???
-
-				if (armature != None):
-					wsum = 0.0
-					zero_bones = []
-
-					for vg in mv.groups:
-						if vg.group >= len(node.vertex_groups):
-							continue;
-						name = node.vertex_groups[vg.group].name
-
-						if (name in si["bone_index"]):
-							# could still put the weight as 0.0001 maybe
-							if (vg.weight > 0.001):  # blender has a lot of zero weight stuff
-								v.bones.append(si["bone_index"][name])
-								v.weights.append(vg.weight)
-								wsum += vg.weight
-					if (wsum == 0.0):
-						if not self.wrongvtx_report:
-							self.operator.report({'WARNING'}, 'Mesh for object "' + node.name + '" has unassigned weights. This may look wrong in exported model.')
-							self.wrongvtx_report = True
-
-						# blender can have bones assigned that weight zero so they remain local
-						# this is the best it can be done?
-						v.bones.append(0)
-						v.weights.append(1)
-
-
-
-
-				tup = v.get_tup()
-				idx = 0
-				if (skeyindex == -1 and tup in vertex_map):  # do not optmize if using shapekeys
-					idx = vertex_map[tup]
-				else:
-					idx = len(vertices)
-					vertices.append(v)
-					vertex_map[tup] = idx
-
-				vi.append(idx)
-
-			if (len(vi) > 2):
-				# only triangles and above
-				indices.append(vi)
-
-
-		meshid = self.new_id("mesh")
-		self.writel(S_GEOM, 1, '<geometry id="' + meshid + '" name="' + name_to_use + '">')
-
+		vertices, normals,uv,colors, surface_v_indices,surface_normal_indices, surface_uv_indices,materials = self.get_mesh_surfaces(node, mesh)
+		
+		has_vertex=True	
+		has_normals=len(normals)>0
+		has_uv=len(uv)>0	
+		has_colors=len(colors)>0
+		
+		self.writel(S_GEOM, 1, '<geometry id="' + mesh_id + '" name="' + node.data.name + '">')
 		self.writel(S_GEOM, 2, '<mesh>')
 
 
 		# Vertex Array
-		self.writel(S_GEOM, 3, '<source id="' + meshid + '-positions">')
-		float_values = ""
-		for v in vertices:
-			 float_values += " " + str(v.vertex.x) + " " + str(v.vertex.y) + " " + str(v.vertex.z)
-		self.writel(S_GEOM, 4, '<float_array id="' + meshid + '-positions-array" count="' + str(len(vertices) * 3) + '">' + float_values + '</float_array>')
+		self.writel(S_GEOM, 3, '<source id="' + mesh_id + '-positions">')
+		float_values = " ".join([str(c) for v in [[v.x,v.y,v.z] for v in vertices] for c in v])
+		self.writel(S_GEOM, 4, '<float_array id="' + mesh_id + '-positions-array" count="' + str(len(vertices) * 3) + '">' + float_values + '</float_array>')
 		self.writel(S_GEOM, 4, '<technique_common>')
-		self.writel(S_GEOM, 4, '<accessor source="#' + meshid + '-positions-array" count="' + str(len(vertices)) + '" stride="3">')
+		self.writel(S_GEOM, 4, '<accessor source="#' + mesh_id + '-positions-array" count="' + str(len(vertices)) + '" stride="3">')
 		self.writel(S_GEOM, 5, '<param name="X" type="float"/>')
 		self.writel(S_GEOM, 5, '<param name="Y" type="float"/>')
 		self.writel(S_GEOM, 5, '<param name="Z" type="float"/>')
@@ -642,68 +657,27 @@ class DaeExporter:
 		self.writel(S_GEOM, 3, '</source>')
 
 		# Normal Array
-
-		self.writel(S_GEOM, 3, '<source id="' + meshid + '-normals">')
-		float_values = ""
-		for v in vertices:
-			 float_values += " " + str(v.normal.x) + " " + str(v.normal.y) + " " + str(v.normal.z)
-		self.writel(S_GEOM, 4, '<float_array id="' + meshid + '-normals-array" count="' + str(len(vertices) * 3) + '">' + float_values + '</float_array>')
-		self.writel(S_GEOM, 4, '<technique_common>')
-		self.writel(S_GEOM, 4, '<accessor source="#' + meshid + '-normals-array" count="' + str(len(vertices)) + '" stride="3">')
-		self.writel(S_GEOM, 5, '<param name="X" type="float"/>')
-		self.writel(S_GEOM, 5, '<param name="Y" type="float"/>')
-		self.writel(S_GEOM, 5, '<param name="Z" type="float"/>')
-		self.writel(S_GEOM, 4, '</accessor>')
-		self.writel(S_GEOM, 4, '</technique_common>')
-		self.writel(S_GEOM, 3, '</source>')
-
-		if (has_tangents):
-			self.writel(S_GEOM, 3, '<source id="' + meshid + '-tangents">')
-			float_values = ""
-			for v in vertices:
-				float_values += " " + str(v.tangent.x) + " " + str(v.tangent.y) + " " + str(v.tangent.z)
-			self.writel(S_GEOM, 4, '<float_array id="' + meshid + '-tangents-array" count="' + str(len(vertices) * 3) + '">' + float_values + '</float_array>')
+		if (has_normals):
+			self.writel(S_GEOM, 3, '<source id="' + mesh_id + '-normals">')
+			float_values = " ".join([str(c) for v in [[v.x,v.y,v.z] for v in normals] for c in v])
+			self.writel(S_GEOM, 4, '<float_array id="' + mesh_id + '-normals-array" count="' + str(len(vertices) * 3) + '">' + float_values + '</float_array>')
 			self.writel(S_GEOM, 4, '<technique_common>')
-			self.writel(S_GEOM, 4, '<accessor source="#' + meshid + '-tangents-array" count="' + str(len(vertices)) + '" stride="3">')
+			self.writel(S_GEOM, 4, '<accessor source="#' + mesh_id + '-normals-array" count="' + str(len(vertices)) + '" stride="3">')
 			self.writel(S_GEOM, 5, '<param name="X" type="float"/>')
 			self.writel(S_GEOM, 5, '<param name="Y" type="float"/>')
 			self.writel(S_GEOM, 5, '<param name="Z" type="float"/>')
 			self.writel(S_GEOM, 4, '</accessor>')
 			self.writel(S_GEOM, 4, '</technique_common>')
 			self.writel(S_GEOM, 3, '</source>')
-
-			self.writel(S_GEOM, 3, '<source id="' + meshid + '-bitangents">')
-			float_values = ""
-			for v in vertices:
-				float_values += " " + str(v.bitangent.x) + " " + str(v.bitangent.y) + " " + str(v.bitangent.z)
-			self.writel(S_GEOM, 4, '<float_array id="' + meshid + '-bitangents-array" count="' + str(len(vertices) * 3) + '">' + float_values + '</float_array>')
-			self.writel(S_GEOM, 4, '<technique_common>')
-			self.writel(S_GEOM, 4, '<accessor source="#' + meshid + '-bitangents-array" count="' + str(len(vertices)) + '" stride="3">')
-			self.writel(S_GEOM, 5, '<param name="X" type="float"/>')
-			self.writel(S_GEOM, 5, '<param name="Y" type="float"/>')
-			self.writel(S_GEOM, 5, '<param name="Z" type="float"/>')
-			self.writel(S_GEOM, 4, '</accessor>')
-			self.writel(S_GEOM, 4, '</technique_common>')
-			self.writel(S_GEOM, 3, '</source>')
-
-
 
 		# UV Arrays
-
-		for uvi in range(uv_layer_count):
-
-			self.writel(S_GEOM, 3, '<source id="' + meshid + '-texcoord-' + str(uvi) + '">')
-			float_values = ""
-			for v in vertices:
-				try:
-					float_values += " " + str(v.uv[uvi].x) + " " + str(v.uv[uvi].y)
-				except:
-					# I don't understand this weird multi-uv-layer API, but with this it seems to works
-					float_values += " 0 0 "
-
-			self.writel(S_GEOM, 4, '<float_array id="' + meshid + '-texcoord-' + str(uvi) + '-array" count="' + str(len(vertices) * 2) + '">' + float_values + '</float_array>')
+		if (has_uv):
+			self.writel(S_GEOM,3,'<source id="'+mesh_id+'-texcoord">')
+			float_values = " ".join([str(c) for v in [[v.x,v.y] for v in uv] for c in v])
+		
+			self.writel(S_GEOM, 4, '<float_array id="' + mesh_id + '-texcoord-array" count="' + str(len(uv) * 2) + '">' + float_values + '</float_array>')
 			self.writel(S_GEOM, 4, '<technique_common>')
-			self.writel(S_GEOM, 4, '<accessor source="#' + meshid + '-texcoord-' + str(uvi) + '-array" count="' + str(len(vertices)) + '" stride="2">')
+			self.writel(S_GEOM, 4, '<accessor source="#' + mesh_id + '-texcoord-array" count="' + str(len(uv)) + '" stride="2">')
 			self.writel(S_GEOM, 5, '<param name="S" type="float"/>')
 			self.writel(S_GEOM, 5, '<param name="T" type="float"/>')
 			self.writel(S_GEOM, 4, '</accessor>')
@@ -713,23 +687,21 @@ class DaeExporter:
 		# Color Arrays
 
 		if (has_colors):
-			self.writel(S_GEOM, 3, '<source id="' + meshid + '-colors">')
-			float_values = ""
-			for v in vertices:
-				float_values += " " + str(v.color.x) + " " + str(v.color.y) + " " + str(v.color.z)
-			self.writel(S_GEOM, 4, '<float_array id="' + meshid + '-colors-array" count="' + str(len(vertices) * 3) + '">' + float_values + '</float_array>')
+			self.writel(S_GEOM, 3, '<source id="' + mesh_id + '-colors">')
+			float_values = " ".join([str(c) for v in [[v.x,v.y,v.z] for v in colors] for c in v])
+			self.writel(S_GEOM, 4, '<float_array id="' + mesh_id + '-colors-array" count="' + str(len(colors) * 3) + '">' + float_values + '</float_array>')
 			self.writel(S_GEOM, 4, '<technique_common>')
-			self.writel(S_GEOM, 4, '<accessor source="#' + meshid + '-colors-array" count="' + str(len(vertices)) + '" stride="3">')
-			self.writel(S_GEOM, 5, '<param name="X" type="float"/>')
-			self.writel(S_GEOM, 5, '<param name="Y" type="float"/>')
-			self.writel(S_GEOM, 5, '<param name="Z" type="float"/>')
+			self.writel(S_GEOM, 4, '<accessor source="#' + mesh_id + '-colors-array" count="' + str(len(colors)) + '" stride="3">')
+			self.writel(S_GEOM, 5, '<param name="R" type="float"/>')
+			self.writel(S_GEOM, 5, '<param name="G" type="float"/>')
+			self.writel(S_GEOM, 5, '<param name="B" type="float"/>')
 			self.writel(S_GEOM, 4, '</accessor>')
 			self.writel(S_GEOM, 4, '</technique_common>')
 			self.writel(S_GEOM, 3, '</source>')
 
 		# Triangle Lists
-		self.writel(S_GEOM, 3, '<vertices id="' + meshid + '-vertices">')
-		self.writel(S_GEOM, 4, '<input semantic="POSITION" source="#' + meshid + '-positions"/>')
+		self.writel(S_GEOM, 3, '<vertices id="' + mesh_id + '-vertices">')
+		self.writel(S_GEOM, 4, '<input semantic="POSITION" source="#' + mesh_id + '-positions"/>')
 		self.writel(S_GEOM, 3, '</vertices>')
 
 		prim_type = ""
@@ -737,44 +709,67 @@ class DaeExporter:
 			prim_type = "triangles"
 		else:
 			prim_type = "polylist"
-
-
-		for m in surface_indices:
-			indices = surface_indices[m]
-			mat = materials[m]
-
+			
+		# calculate offsets and layout of <p> indices			
+		offset=0
+		if (has_vertex):
+			vertex_offset=offset
+			offset+=1
+		if (has_normals):
+			normal_offset=offset
+			offset+=1
+		if (has_uv):
+			uv_offset=offset
+			offset+=1
+		if (has_colors):
+			color_offset=offset
+			offset+=1
+		stride=offset
+		
+		material_bind={}
+		
+		for m in surface_v_indices:
+			
 			# Every face set must have a material symbol even if no material is assigned in Blender.
-			matref = self.new_id("material")
-			self.writel(S_GEOM, 3, '<' + prim_type + ' count="' + str(int(len(indices))) + '" material="' + matref + '">')  # todo material
-			if (mat != None):
-				mat_assign.append((mat, matref))
+			matref = self.get_material_link_symbol(materials[m])
+			material_bind[materials[m]]=matref
 
-
-			self.writel(S_GEOM, 4, '<input semantic="VERTEX" source="#' + meshid + '-vertices" offset="0"/>')
-			self.writel(S_GEOM, 4, '<input semantic="NORMAL" source="#' + meshid + '-normals" offset="0"/>')
-
-			for uvi in range(uv_layer_count):
-				self.writel(S_GEOM, 4, '<input semantic="TEXCOORD" source="#' + meshid + '-texcoord-' + str(uvi) + '" offset="0" set="' + str(uvi) + '"/>')
-
+			self.writel(S_GEOM, 3, '<' + prim_type + ' count="' + str(len(surface_v_indices[m])) + '" material="' + matref + '">')  # todo material
+			if (has_vertex):
+				self.writel(S_GEOM, 4, '<input semantic="VERTEX" source="#' + mesh_id + '-vertices" offset="' + str(vertex_offset)+'"/>')
+			if (has_normals):
+				self.writel(S_GEOM, 4, '<input semantic="NORMAL" source="#' + mesh_id + '-normals" offset="' + str(normal_offset)+'"/>')
+			if (has_uv):
+				self.writel(S_GEOM, 4, '<input semantic="TEXCOORD" source="#' + mesh_id + '-texcoord" offset="' + str(uv_offset)+'" set="0"/>')
 			if (has_colors):
-				self.writel(S_GEOM, 4, '<input semantic="COLOR" source="#' + meshid + '-colors" offset="0"/>')
-			if (has_tangents):
-				self.writel(S_GEOM, 4, '<input semantic="TEXTANGENT" source="#' + meshid + '-tangents" offset="0"/>')
-				self.writel(S_GEOM, 4, '<input semantic="TEXBINORMAL" source="#' + meshid + '-bitangents" offset="0"/>')
+				self.writel(S_GEOM, 4, '<input semantic="COLOR" source="#' + mesh_id + '-colors" offset="' + str(color_offset)+'"/>')
 			
 			# vcount list if not triangulating
 			if (not triangulate):
 				int_values = "<vcount>"
-				for p in indices:
-					int_values += " " + str(len(p))
+				int_values+=" ".join([str(len(p)) for p in surface_v_indices[m]])
 				int_values += "</vcount>"
 				self.writel(S_GEOM, 4, int_values)
 				
 			# faces
 			int_values = "<p>"
-			for p in indices:
-				for i in p:
-					int_values += " " + str(i)
+
+			polygons=[]
+			indices= [0 for i in range(stride)]
+				
+			for p in range(0,len(surface_v_indices[m])):
+				for i in range(0,len(surface_v_indices[m][p])):
+					if (has_vertex):
+						indices[vertex_offset]=surface_v_indices[m][p][i]
+					if (has_normals):
+						indices[normal_offset]=surface_normal_indices[m][p][i]
+					if (has_uv):
+						indices[uv_offset]=surface_uv_indices[m][p][i]
+					if (has_colors):
+						indices[color_offset]=surface_v_indices[m][p][i]
+					polygons.append(list(indices))
+	
+			int_values+=" ".join([str(i) for c in polygons for i in c])
 			int_values += "</p>"
 			self.writel(S_GEOM, 4, int_values)
 
@@ -784,173 +779,33 @@ class DaeExporter:
 		self.writel(S_GEOM, 2, '</mesh>')
 		self.writel(S_GEOM, 1, '</geometry>')
 
+		return True,material_bind
 
-		meshdata = {}
-		meshdata["id"] = meshid
-		meshdata["material_assign"] = mat_assign
-		if (skeyindex == -1):
-			self.mesh_cache[node.data] = meshdata
-
-
-		# Export armature data (if armature exists)
-
-		if (armature != None and (skel_source != None or skeyindex == -1)):
-
-			contid = self.new_id("controller")
-
-			self.writel(S_SKIN, 1, '<controller id="' + contid + '">')
-			if (skel_source != None):
-				self.writel(S_SKIN, 2, '<skin source="#' + skel_source + '">')
-			else:
-				self.writel(S_SKIN, 2, '<skin source="#' + meshid + '">')
-
-			self.writel(S_SKIN, 3, '<bind_shape_matrix>' + strmtx(node.matrix_world) + '</bind_shape_matrix>')
-			# Joint Names
-			self.writel(S_SKIN, 3, '<source id="' + contid + '-joints">')
-			name_values = ""
-			for v in si["bone_names"]:
-				name_values += " " + v
-
-			self.writel(S_SKIN, 4, '<Name_array id="' + contid + '-joints-array" count="' + str(len(si["bone_names"])) + '">' + name_values + '</Name_array>')
-			self.writel(S_SKIN, 4, '<technique_common>')
-			self.writel(S_SKIN, 4, '<accessor source="#' + contid + '-joints-array" count="' + str(len(si["bone_names"])) + '" stride="1">')
-			self.writel(S_SKIN, 5, '<param name="JOINT" type="Name"/>')
-			self.writel(S_SKIN, 4, '</accessor>')
-			self.writel(S_SKIN, 4, '</technique_common>')
-			self.writel(S_SKIN, 3, '</source>')
-			# Pose Matrices!
-			self.writel(S_SKIN, 3, '<source id="' + contid + '-bind_poses">')
-			pose_values = ""
-			for v in si["bone_bind_poses"]:
-				pose_values += " " + strmtx(v)
-
-			self.writel(S_SKIN, 4, '<float_array id="' + contid + '-bind_poses-array" count="' + str(len(si["bone_bind_poses"]) * 16) + '">' + pose_values + '</float_array>')
-			self.writel(S_SKIN, 4, '<technique_common>')
-			self.writel(S_SKIN, 4, '<accessor source="#' + contid + '-bind_poses-array" count="' + str(len(si["bone_bind_poses"])) + '" stride="16">')
-			self.writel(S_SKIN, 5, '<param name="TRANSFORM" type="float4x4"/>')
-			self.writel(S_SKIN, 4, '</accessor>')
-			self.writel(S_SKIN, 4, '</technique_common>')
-			self.writel(S_SKIN, 3, '</source>')
-			# Skin Weights!
-			self.writel(S_SKIN, 3, '<source id="' + contid + '-skin_weights">')
-			skin_weights = ""
-			skin_weights_total = 0
-			for v in vertices:
-				skin_weights_total += len(v.weights)
-				for w in v.weights:
-					skin_weights += " " + str(w)
-
-			self.writel(S_SKIN, 4, '<float_array id="' + contid + '-skin_weights-array" count="' + str(skin_weights_total) + '">' + skin_weights + '</float_array>')
-			self.writel(S_SKIN, 4, '<technique_common>')
-			self.writel(S_SKIN, 4, '<accessor source="#' + contid + '-skin_weights-array" count="' + str(skin_weights_total) + '" stride="1">')
-			self.writel(S_SKIN, 5, '<param name="WEIGHT" type="float"/>')
-			self.writel(S_SKIN, 4, '</accessor>')
-			self.writel(S_SKIN, 4, '</technique_common>')
-			self.writel(S_SKIN, 3, '</source>')
-
-
-			self.writel(S_SKIN, 3, '<joints>')
-			self.writel(S_SKIN, 4, '<input semantic="JOINT" source="#' + contid + '-joints"/>')
-			self.writel(S_SKIN, 4, '<input semantic="INV_BIND_MATRIX" source="#' + contid + '-bind_poses"/>')
-			self.writel(S_SKIN, 3, '</joints>')
-			self.writel(S_SKIN, 3, '<vertex_weights count="' + str(len(vertices)) + '">')
-			self.writel(S_SKIN, 4, '<input semantic="JOINT" source="#' + contid + '-joints" offset="0"/>')
-			self.writel(S_SKIN, 4, '<input semantic="WEIGHT" source="#' + contid + '-skin_weights" offset="1"/>')
-			vcounts = ""
-			vs = ""
-			vcount = 0
-			for v in vertices:
-				vcounts += " " + str(len(v.weights))
-				for b in v.bones:
-					vs += " " + str(b)
-					vs += " " + str(vcount)
-					vcount += 1
-			self.writel(S_SKIN, 4, '<vcount>' + vcounts + '</vcount>')
-			self.writel(S_SKIN, 4, '<v>' + vs + '</v>')
-			self.writel(S_SKIN, 3, '</vertex_weights>')
-
-
-			self.writel(S_SKIN, 2, '</skin>')
-			self.writel(S_SKIN, 1, '</controller>')
-			meshdata["skin_id"] = contid
-
-
-		return meshdata
-
-
-	def export_mesh_node(self, node, il):
-
-		if (node.data == None):
-			return
-		armature = None
-		armcount = 0
-		for n in node.modifiers:
-			if (n.type == "ARMATURE"):
-				armcount += 1
-
-		if (node.parent != None):
-			if (node.parent.type == "ARMATURE"):
-				armature = node.parent
-				if (armcount > 1):
-					self.operator.report({'WARNING'}, 'Object "' + node.name + '" refers to more than one armature! This is unsupported.')
-				if (armcount == 0):
-					self.operator.report({'WARNING'}, 'Object "' + node.name + '" is child of an armature, but has no armature modifier.')
-
-
-		if (armcount > 0 and not armature):
-			self.operator.report({'WARNING'}, 'Object "' + node.name + '" has armature modifier, but is not a child of an armature. This is unsupported.')
-
-
-		if (node.data.shape_keys != None):
-				sk = node.data.shape_keys
-				if (sk.animation_data):
-					# print("HAS ANIM")
-					# print("DRIVERS: "+str(len(sk.animation_data.drivers)))
-					for d in sk.animation_data.drivers:
-						if (d.driver):
-							for v in d.driver.variables:
-								for t in v.targets:
-									if (t.id != None and t.id.name in self.scene.objects):
-										# print("LINKING "+str(node)+" WITH "+str(t.id.name))
-										self.armature_for_morph[node] = self.scene.objects[t.id.name]
-
-
-		meshdata = self.export_mesh(node, armature)
-		close_controller = False
-
-		if ("skin_id" in meshdata):
-			close_controller = True
-			self.writel(S_NODES, il, '<instance_controller url="#' + meshdata["skin_id"] + '">')
-			for sn in self.skeleton_info[armature]["skeleton_nodes"]:
-				self.writel(S_NODES, il + 1, '<skeleton>#' + sn + '</skeleton>')
-		elif ("morph_id" in meshdata):
-			self.writel(S_NODES, il, '<instance_controller url="#' + meshdata["morph_id"] + '">')
-			close_controller = True
-		elif (armature == None):
-			self.writel(S_NODES, il, '<instance_geometry url="#' + meshdata["id"] + '">')
-
-
-		if (len(meshdata["material_assign"]) > 0):
-
-			self.writel(S_NODES, il + 1, '<bind_material>')
-			self.writel(S_NODES, il + 2, '<technique_common>')
-			for m in meshdata["material_assign"]:
-				self.writel(S_NODES, il + 3, '<instance_material symbol="' + m[1] + '" target="#' + m[0] + '"/>')
-
-			self.writel(S_NODES, il + 2, '</technique_common>')
-			self.writel(S_NODES, il + 1, '</bind_material>')
-
-		if (close_controller):
-			self.writel(S_NODES, il, '</instance_controller>')
+	def get_material_link_symbol(self, material):
+		if (material != None):
+			count = self.material_link_symbols.get(material,0)
+			symbol = material + "-symbol"
+			if (count > 0):
+				symbol+="-"+str(count)
+			self.material_link_symbols[material] = count+1
+			return symbol
 		else:
-			self.writel(S_NODES, il, '</instance_geometry>')
-
+			matref = self.new_id("material-symbol")
+		return matref
+	
+	def get_node_id(self,name):
+		count=self.node_names.get(name,0)
+		node_id=name
+		if (count>0):
+			node_id+="-"+str(count)
+		self.node_names[name]=count+1
+		return node_id
 
 	def export_armature_bone(self, bone, il, si):
-		boneid = self.new_id("bone")
+		boneid = self.get_node_id(bone.name)
 		boneidx = si["bone_count"]
 		si["bone_count"] += 1
-		bonesid = si["id"] + "-" + str(boneidx)
+		bonesid = bone.name
 		if (bone.name in self.used_bones):
 			if (self.config["use_anim_action_all"]):
 				self.operator.report({'WARNING'}, 'Bone name "' + bone.name + '" used in more than one skeleton. Actions might export wrong.')
@@ -962,15 +817,11 @@ class DaeExporter:
 		si["bone_names"].append(bonesid)
 		self.writel(S_NODES, il, '<node id="' + boneid + '" sid="' + bonesid + '" name="' + bone.name + '" type="JOINT">')
 		il += 1
-		xform = bone.matrix_local
-		si["bone_bind_poses"].append((si["armature_xform"] * xform).inverted())
 
-		if (bone.parent != None):
-			xform = bone.parent.matrix_local.inverted() * xform
-		else:
-			si["skeleton_nodes"].append(boneid)
+		transforms = self.get_bone_transform_xml(bone)
+		for t in transforms:
+			self.writel(S_NODES, il, t)
 
-		self.writel(S_NODES, il, '<matrix sid="transform">' + strmtx(xform) + '</matrix>')
 		for c in bone.children:
 			self.export_armature_bone(c, il, si)
 		il -= 1
@@ -979,15 +830,10 @@ class DaeExporter:
 
 	def export_armature_node(self, node, il):
 
-		if (node.data == None):
-			return
-
 		self.skeletons.append(node)
 
 		armature = node.data
 		self.skeleton_info[node] = { "bone_count":0, "id":self.new_id("skelbones"), "name":node.name, "bone_index":{}, "bone_ids":{}, "bone_names":[], "bone_bind_poses":[], "skeleton_nodes":[], "armature_xform":node.matrix_world }
-
-
 
 		for b in armature.bones:
 			if (b.parent != None):
@@ -1001,14 +847,23 @@ class DaeExporter:
 						self.action_constraints.append(x.action)
 
 
-	def export_camera_node(self, node, il):
+	def export_cameras(self):
+		cameras = 	set(
+			map(lambda obj : obj.data,
+			filter(lambda obj :	obj.type == "CAMERA", 	self.valid_nodes)
+		));
+			
+		camera_lookup={}
+		for camera in cameras:
+			camera_id=camera.name;
+			camera_lookup[camera.name]=camera_id
+			self.export_camera(camera,camera_id)
+			
+		return camera_lookup
+		
+	def export_camera(self, camera,camera_id):
 
-		if (node.data == None):
-			return
-
-		camera = node.data
-		camid = self.new_id("camera")
-		self.writel(S_CAMS, 1, '<camera id="' + camid + '" name="' + camera.name + '">')
+		self.writel(S_CAMS, 1, '<camera id="' + camera_id + '" name="' + camera.name + '">')
 		self.writel(S_CAMS, 2, '<optics>')
 		self.writel(S_CAMS, 3, '<technique_common>')
 		if (camera.type == "PERSP"):
@@ -1030,17 +885,24 @@ class DaeExporter:
 		self.writel(S_CAMS, 2, '</optics>')
 		self.writel(S_CAMS, 1, '</camera>')
 
+	def export_lights(self):
+		lights=set(
+			map(lambda obj : obj.data,
+			filter(lambda obj :	obj.type == "LAMP", 	self.valid_nodes)
+		));
+		
+					
+		light_lookup={}
+		for light in lights:
+			light_id=light.name;
+			light_lookup[light.name]=light_id
+			self.export_lamp(light,light_id)
+			
+		return light_lookup
+		
+	def export_lamp(self, light,light_id):
 
-		self.writel(S_NODES, il, '<instance_camera url="#' + camid + '"/>')
-
-	def export_lamp_node(self, node, il):
-
-		if (node.data == None):
-			return
-
-		light = node.data
-		lightid = self.new_id("light")
-		self.writel(S_LAMPS, 1, '<light id="' + lightid + '" name="' + light.name + '">')
+		self.writel(S_LAMPS, 1, '<light id="' + light_id + '" name="' + light.name + '">')
 		# self.writel(S_LAMPS,2,'<optics>')
 		self.writel(S_LAMPS, 3, '<technique_common>')
 
@@ -1073,14 +935,9 @@ class DaeExporter:
 		self.writel(S_LAMPS, 1, '</light>')
 
 
-		self.writel(S_NODES, il, '<instance_light url="#' + lightid + '"/>')
+	def export_curve(self, curve,spline_id):
 
-
-	def export_curve(self, curve):
-
-		splineid = self.new_id("spline")
-
-		self.writel(S_GEOM, 1, '<geometry id="' + splineid + '" name="' + curve.name + '">')
+		self.writel(S_GEOM, 1, '<geometry id="' + spline_id + '" name="' + curve.name + '">')
 		self.writel(S_GEOM, 2, '<spline closed="0">')
 
 		points = []
@@ -1127,13 +984,13 @@ class DaeExporter:
 
 
 
-		self.writel(S_GEOM, 3, '<source id="' + splineid + '-positions">')
+		self.writel(S_GEOM, 3, '<source id="' + spline_id + '-positions">')
 		position_values = ""
 		for x in points:
 			position_values += " " + str(x)
-		self.writel(S_GEOM, 4, '<float_array id="' + splineid + '-positions-array" count="' + str(len(points)) + '">' + position_values + '</float_array>')
+		self.writel(S_GEOM, 4, '<float_array id="' + spline_id + '-positions-array" count="' + str(len(points)) + '">' + position_values + '</float_array>')
 		self.writel(S_GEOM, 4, '<technique_common>')
-		self.writel(S_GEOM, 4, '<accessor source="#' + splineid + '-positions-array" count="' + str(len(points) / 3) + '" stride="3">')
+		self.writel(S_GEOM, 4, '<accessor source="#' + spline_id + '-positions-array" count="' + str(len(points) / 3) + '" stride="3">')
 		self.writel(S_GEOM, 5, '<param name="X" type="float"/>')
 		self.writel(S_GEOM, 5, '<param name="Y" type="float"/>')
 		self.writel(S_GEOM, 5, '<param name="Z" type="float"/>')
@@ -1141,13 +998,13 @@ class DaeExporter:
 		self.writel(S_GEOM, 4, '</technique_common>')
 		self.writel(S_GEOM, 3, '</source>')
 
-		self.writel(S_GEOM, 3, '<source id="' + splineid + '-intangents">')
+		self.writel(S_GEOM, 3, '<source id="' + spline_id + '-intangents">')
 		intangent_values = ""
 		for x in handles_in:
 			intangent_values += " " + str(x)
-		self.writel(S_GEOM, 4, '<float_array id="' + splineid + '-intangents-array" count="' + str(len(points)) + '">' + intangent_values + '</float_array>')
+		self.writel(S_GEOM, 4, '<float_array id="' + spline_id + '-intangents-array" count="' + str(len(points)) + '">' + intangent_values + '</float_array>')
 		self.writel(S_GEOM, 4, '<technique_common>')
-		self.writel(S_GEOM, 4, '<accessor source="#' + splineid + '-intangents-array" count="' + str(len(points) / 3) + '" stride="3">')
+		self.writel(S_GEOM, 4, '<accessor source="#' + spline_id + '-intangents-array" count="' + str(len(points) / 3) + '" stride="3">')
 		self.writel(S_GEOM, 5, '<param name="X" type="float"/>')
 		self.writel(S_GEOM, 5, '<param name="Y" type="float"/>')
 		self.writel(S_GEOM, 5, '<param name="Z" type="float"/>')
@@ -1155,13 +1012,13 @@ class DaeExporter:
 		self.writel(S_GEOM, 4, '</technique_common>')
 		self.writel(S_GEOM, 3, '</source>')
 
-		self.writel(S_GEOM, 3, '<source id="' + splineid + '-outtangents">')
+		self.writel(S_GEOM, 3, '<source id="' + spline_id + '-outtangents">')
 		outtangent_values = ""
 		for x in handles_out:
 			outtangent_values += " " + str(x)
-		self.writel(S_GEOM, 4, '<float_array id="' + splineid + '-outtangents-array" count="' + str(len(points)) + '">' + outtangent_values + '</float_array>')
+		self.writel(S_GEOM, 4, '<float_array id="' + spline_id + '-outtangents-array" count="' + str(len(points)) + '">' + outtangent_values + '</float_array>')
 		self.writel(S_GEOM, 4, '<technique_common>')
-		self.writel(S_GEOM, 4, '<accessor source="#' + splineid + '-outtangents-array" count="' + str(len(points) / 3) + '" stride="3">')
+		self.writel(S_GEOM, 4, '<accessor source="#' + spline_id + '-outtangents-array" count="' + str(len(points) / 3) + '" stride="3">')
 		self.writel(S_GEOM, 5, '<param name="X" type="float"/>')
 		self.writel(S_GEOM, 5, '<param name="Y" type="float"/>')
 		self.writel(S_GEOM, 5, '<param name="Z" type="float"/>')
@@ -1169,87 +1026,182 @@ class DaeExporter:
 		self.writel(S_GEOM, 4, '</technique_common>')
 		self.writel(S_GEOM, 3, '</source>')
 
-		self.writel(S_GEOM, 3, '<source id="' + splineid + '-interpolations">')
+		self.writel(S_GEOM, 3, '<source id="' + spline_id + '-interpolations">')
 		interpolation_values = ""
 		for x in interps:
 			interpolation_values += " " + x
-		self.writel(S_GEOM, 4, '<Name_array id="' + splineid + '-interpolations-array" count="' + str(len(interps)) + '">' + interpolation_values + '</Name_array>')
+		self.writel(S_GEOM, 4, '<Name_array id="' + spline_id + '-interpolations-array" count="' + str(len(interps)) + '">' + interpolation_values + '</Name_array>')
 		self.writel(S_GEOM, 4, '<technique_common>')
-		self.writel(S_GEOM, 4, '<accessor source="#' + splineid + '-interpolations-array" count="' + str(len(interps)) + '" stride="1">')
+		self.writel(S_GEOM, 4, '<accessor source="#' + spline_id + '-interpolations-array" count="' + str(len(interps)) + '" stride="1">')
 		self.writel(S_GEOM, 5, '<param name="INTERPOLATION" type="name"/>')
 		self.writel(S_GEOM, 4, '</accessor>')
 		self.writel(S_GEOM, 4, '</technique_common>')
 		self.writel(S_GEOM, 3, '</source>')
 
 
-		self.writel(S_GEOM, 3, '<source id="' + splineid + '-tilts">')
+		self.writel(S_GEOM, 3, '<source id="' + spline_id + '-tilts">')
 		tilt_values = ""
 		for x in tilts:
 			tilt_values += " " + str(x)
-		self.writel(S_GEOM, 4, '<float_array id="' + splineid + '-tilts-array" count="' + str(len(tilts)) + '">' + tilt_values + '</float_array>')
+		self.writel(S_GEOM, 4, '<float_array id="' + spline_id + '-tilts-array" count="' + str(len(tilts)) + '">' + tilt_values + '</float_array>')
 		self.writel(S_GEOM, 4, '<technique_common>')
-		self.writel(S_GEOM, 4, '<accessor source="#' + splineid + '-tilts-array" count="' + str(len(tilts)) + '" stride="1">')
+		self.writel(S_GEOM, 4, '<accessor source="#' + spline_id + '-tilts-array" count="' + str(len(tilts)) + '" stride="1">')
 		self.writel(S_GEOM, 5, '<param name="TILT" type="float"/>')
 		self.writel(S_GEOM, 4, '</accessor>')
 		self.writel(S_GEOM, 4, '</technique_common>')
 		self.writel(S_GEOM, 3, '</source>')
 
 		self.writel(S_GEOM, 3, '<control_vertices>')
-		self.writel(S_GEOM, 4, '<input semantic="POSITION" source="#' + splineid + '-positions"/>')
-		self.writel(S_GEOM, 4, '<input semantic="IN_TANGENT" source="#' + splineid + '-intangents"/>')
-		self.writel(S_GEOM, 4, '<input semantic="OUT_TANGENT" source="#' + splineid + '-outtangents"/>')
-		self.writel(S_GEOM, 4, '<input semantic="INTERPOLATION" source="#' + splineid + '-interpolations"/>')
-		self.writel(S_GEOM, 4, '<input semantic="TILT" source="#' + splineid + '-tilts"/>')
+		self.writel(S_GEOM, 4, '<input semantic="POSITION" source="#' + spline_id + '-positions"/>')
+		self.writel(S_GEOM, 4, '<input semantic="IN_TANGENT" source="#' + spline_id + '-intangents"/>')
+		self.writel(S_GEOM, 4, '<input semantic="OUT_TANGENT" source="#' + spline_id + '-outtangents"/>')
+		self.writel(S_GEOM, 4, '<input semantic="INTERPOLATION" source="#' + spline_id + '-interpolations"/>')
+		self.writel(S_GEOM, 4, '<input semantic="TILT" source="#' + spline_id + '-tilts"/>')
 		self.writel(S_GEOM, 3, '</control_vertices>')
 
 
 		self.writel(S_GEOM, 2, '</spline>')
 		self.writel(S_GEOM, 1, '</geometry>')
+	
+	def get_bone_transform_xml(self,bone):
+		return self.transform_to_xml(self.get_bone_transform(bone))
+	
+	def get_node_transform_xml(self,node):
+		return self.transform_to_xml(self.get_node_local_transform(node))
+	
+	def transform_to_xml(self,transform):
+		transforms=[
+				self.get_matrix_transform_xml(transform["matrix"]),
+				self.get_scale_xml(transform["scale"])]
+		return [e for t in transforms for e in t]
+		
+	def get_node_local_transform(self,node):		
+		rotation=self.get_node_euler_rotation(node)
+		translation=self.get_node_translation(node)
+		matrix = Matrix.Translation(translation) * rotation.to_matrix().to_4x4()
+		scale=self.get_node_scale(node).copy()
+		return {"matrix":matrix,"scale":scale}
 
-		return splineid
+	def get_node_world_transform(self,node):
+		matrix = node.matrix_world.copy()
+		if (node.parent):
+			matrix = node.parent.matrix_world.inverted() * matrix
+		scale=self.get_node_scale(node)
+		inverse_scale=Matrix.Scale(1,4,scale).inverted()
+		matrix = inverse_scale*matrix
+		return {"matrix":matrix,"scale":scale}
+		
+	def get_bone_transform(self,bone):
+		if (bone.parent != None):
+			matrix = bone.parent.matrix_local.inverted() * bone.matrix_local
+		else:
+			matrix = bone.matrix_local.copy()
+		return {"matrix":matrix,"scale":(1,1,1)}
+	
+	def get_posebone_transform(self,posebone):
+		matrix = posebone.matrix.copy()
+		if (posebone.parent):
+			parent_invisible=False
 
-	def export_curve_node(self, node, il):
+			for i in range(3):
+				if (posebone.parent.scale[i]==0.0):
+					parent_invisible=True
+					break
 
-		if (node.data == None):
-			return
-		curveid = self.export_curve(node.data)
+			if (not parent_invisible):
+				matrix = posebone.parent.matrix.inverted() * matrix
+				
+		scale=posebone.scale
+		inverse_scale=Matrix.Scale(1,4,scale).inverted()
+		matrix = inverse_scale*matrix
+		return {"matrix":matrix,"scale":scale}
+	
+	def get_node_euler_rotation(self,node):
+		if (node.rotation_mode=="AXIS"):
+			return Euler().rotate_axis(node.rotation_axis_angle,math.radians(node.rotation_axis_angle[3]))
+		else:
+			rotation_euler= Euler(
+						(math.radians(node.rotation_euler[0]),
+						math.radians(node.rotation_euler[1]),
+						math.radians(node.rotation_euler[2])),
+						node.rotation_mode)
+			delta_rotation_euler= Euler(
+						(math.radians(node.delta_rotation_euler[0]),
+						math.radians(node.delta_rotation_euler[1]),
+						math.radians(node.delta_rotation_euler[2])),
+						node.rotation_mode)
+			rotation_euler.rotate(delta_rotation_euler)
+			return rotation_euler
+		
+	def get_node_translation(self,node):
+		return node.location+node.delta_location
+	
+	def get_node_scale(self,node):
+		return Vector([x*y for (x,y) in zip(node.scale,node.delta_scale)])
 
-		self.writel(S_NODES, il, '<instance_geometry url="#' + curveid + '">')
-		self.writel(S_NODES, il, '</instance_geometry>')
-
-
-
-	def export_node(self, node, il):
+	def get_scale_xml(self,scale):
+		return ['<scale sid="scale">'+" ".join([str(e) for e in scale])+'</scale>']
+		
+	def get_location_xml(self,location):
+		return [('<translate sid="location">' + " ".join([str(e) for e in location])+'</translate>')]
+	
+	def get_matrix_transform_xml(self,matrix):
+		return['<matrix sid="transform">'+strmtx(matrix)+'</matrix>']
+			
+	def export_node(self, node, il,lookup):
 		if (not node in self.valid_nodes):
 			return
-		prev_node = bpy.context.scene.objects.active
-		bpy.context.scene.objects.active = node
 
-		self.writel(S_NODES, il, '<node id="' + self.validate_id(node.name) + '" name="' + node.name + '" type="NODE">')
+		node_id = self.get_node_id(node.name)
+		lookup["Scene_nodes"][node.name]=node_id
+		
+		self.writel(S_NODES, il, '<node id="' + node_id+ '" name="' + node.name + '" type="NODE">')
 		il += 1
+		
+		transforms=self.get_node_transform_xml(node)
+		for t in transforms:
+			self.writel(S_NODES, il, t)
 
-		self.writel(S_NODES, il, '<matrix sid="transform">' + strmtx(node.matrix_local) + '</matrix>')
-		# print("NODE TYPE: "+node.type+" NAME: "+node.name)
-		if (node.type == "MESH"):
-			self.export_mesh_node(node, il)
-		elif (node.type == "CURVE"):
-			self.export_curve_node(node, il)
-		elif (node.type == "ARMATURE"):
+		if (node.type == "ARMATURE"):
 			self.export_armature_node(node, il)
-		elif (node.type == "CAMERA"):
-			self.export_camera_node(node, il)
-		elif (node.type == "LAMP"):
-			self.export_lamp_node(node, il)
+			lookup["Armature"]=node_id
+		elif (node.data != None):
+			if (node.data.name in lookup["skin_controller"]):
+				skin_id=lookup["skin_controller"][node.data.name]
+				self.writel(S_NODES,il,'<instance_controller url="#'+skin_id+'">')
+				self.writel(S_NODES,il+1,'<skeleton>#'+lookup["Armature"]+'</skeleton>')
+				self.export_material_bind(node, il, lookup)
+				self.writel(S_NODES,il,"</instance_controller>")
+			elif (node.data.name in lookup["geometry_morphs"]):
+				morph_id=lookup["morph"][node.data.name]
+				self.writel(S_NODES,il,'<instance_controller url="#'+morph_id+'">')
+				self.export_material_bind(node, il, lookup)
+				self.writel(S_NODES,il,"</instance_controller>")
+			elif (node.data.name in lookup["mesh"]):
+				mesh_id=lookup["mesh"][node.data.name]
+				self.writel(S_NODES,il,'<instance_geometry url="#'+mesh_id+'">')
+				self.export_material_bind(node, il, lookup)
+				self.writel(S_NODES,il,"</instance_geometry>")
+			elif (node.data.name in lookup["camera"]):
+				camera_id=lookup["camera"][node.data.name]
+				self.writel(S_NODES,il,'<instance_camera url="#'+camera_id+'"/>')
+			elif (node.data.name in lookup["light"]):
+				light_id=lookup["light"][node.data.name]
+				self.writel(S_NODES,il,'<instance_light url="#'+light_id+'"/>')
 
+		
 		for x in node.children:
-			self.export_node(x, il)
+			self.export_node(x, il,lookup)
 
 		il -= 1
 		self.writel(S_NODES, il, '</node>')
-		bpy.context.scene.objects.active = prev_node  # make previous node active again
 
 	def is_node_valid(self, node):
 		if node == None:
+			return False
+		if (not hasattr(node, "data")):
+			return False
+		if (not node.data):
 			return False
 		if (not node.type in self.config["object_types"]):
 			return False
@@ -1268,6 +1220,19 @@ class DaeExporter:
 
 		return True
 
+	def export_material_bind(self,node,il,lookup):
+		if (node.data.name in lookup["material_bind"]):
+			self.writel(S_NODES,il+1,'<bind_material>')
+			self.writel(S_NODES,il+2,'<technique_common>')
+			material_bind=lookup["material_bind"][node.data.name]
+			for material_name,material_symbol in material_bind.items():
+				if  (material_name in lookup["material"]):
+					material_id=lookup["material"][material_name]
+					self.writel(S_NODES,il+3,'<instance_material symbol="'+material_symbol+'" target="#'+material_id+'"/>')
+			self.writel(S_NODES,il+2,'</technique_common>')
+			self.writel(S_NODES,il+1,'</bind_material>')
+
+
 	def export_materials(self):
 
 		# get materials for export
@@ -1275,12 +1240,13 @@ class DaeExporter:
 		if (self.config["use_export_selected"]):
 			# only export used materials for meshes that will be exported
 			materials = 	set(
+			filter(lambda mat : mat != None,
 			itertools.chain.from_iterable(
-				map(lambda mesh :	
-					filter(lambda values : values != None, mesh.materials.values()),
-				map(lambda obj : obj.data,
-				filter(lambda obj : obj.type == "MESH", self.valid_nodes)
-			))));
+				filter(lambda values : values != None,
+				map(lambda obj :	obj.data.materials,
+				filter(lambda node : hasattr(node.data, "materials"),
+					self.valid_nodes)
+			)))));
 		else:
 			# Export all materials including those with fake users
 			materials = set(bpy.data.materials.values())
@@ -1290,12 +1256,14 @@ class DaeExporter:
 	 
 		if (self.config["use_export_selected"]):
 			# Textures based selected materials
-			images = set( 
+			images = set(
 				map(lambda ts : ts.texture.image,
 			 filter(
 					lambda ts : ts and ts.use and ts.texture and ts.texture.type == "IMAGE" and ts.texture.image,
-					map(lambda material : material.texture_slots, materials)
-					)));
+					itertools.chain.from_iterable(
+					filter(lambda values : values != None,
+					map(lambda material : material.texture_slots.values(), materials)
+					)))));
 		else:
 			# All textures including fake user and unused
 			images = set(
@@ -1308,45 +1276,40 @@ class DaeExporter:
 			
 			# export library_images content
 			
-		image_lookup={}
+		image_lookup = {}
 		for image in images:
-			image_id=self.sanatize_id(image.name)
-			image_lookup[image.name]=image_id
-			self.export_image(image,image_id)
+			image_id = self.sanatize_id(image.name)
+			image_lookup[image.name] = image_id
+			self.export_image(image, image_id)
 				
 		
 		# export library_effects content
 		
-		effect_lookup={}				
+		effect_lookup = {}				
 		for mat in materials:
-			effect_id=self.sanatize_id(mat.name)+"-effect"
-			effect_lookup[mat.name]=effect_id
-			self.export_effect(mat,effect_id,image_lookup)
+			effect_id = self.sanatize_id(mat.name) + "-effect"
+			effect_lookup[mat.name] = effect_id
+			self.export_effect(mat, effect_id, image_lookup)
 		
 		
 		# export library_materials content
 		
-		material_lookup={}
+		material_lookup = {}
 		for mat in materials:
-			material_id=self.sanatize_id(mat.name)
-			material_lookup[mat.name]=material_id
-			self.export_material(mat,material_id,effect_lookup[mat.name])
+			material_id = self.sanatize_id(mat.name)
+			material_lookup[mat.name] = material_id
+			self.export_material(mat, material_id, effect_lookup[mat.name])
 			
 		return material_lookup
 			
-	def export_material(self,material,material_id,effect_id):
+	def export_material(self, material, material_id, effect_id):
 		# Material
 		self.writel(S_MATS, 1, '<material id="' + material_id + '" name="' + material.name + '">')
 		self.writel(S_MATS, 2, '<instance_effect url="#' + effect_id + '"/>')
 		self.writel(S_MATS, 1, '</material>')
-		
-	def export_scene(self):
 
-
-		self.writel(S_NODES, 0, '<library_visual_scenes>')
-		self.writel(S_NODES, 1, '<visual_scene id="' + self.scene_name + '" name="scene">')
-
-		# validate nodes
+	def get_valid_nodes(self):
+				# validate nodes
 		for obj in self.scene.objects:
 			if (obj in self.valid_nodes):
 				continue
@@ -1357,23 +1320,27 @@ class DaeExporter:
 						self.valid_nodes.append(n)
 					n = n.parent
 
+		
+	def export_scene(self,lookup):
 
+		lookup["Armature"]=""
+		lookup["Scene_nodes"]={}
+		
+		self.writel(S_NODES, 0, '<library_visual_scenes>')
+		self.writel(S_NODES, 1, '<visual_scene id="' + self.scene_name + '" name="scene">')
 
-		for obj in self.scene.objects:
-			if (obj in self.valid_nodes and obj.parent == None):
-				self.export_node(obj, 2)
+		for obj in self.valid_nodes:
+			if (obj.parent == None):
+				self.export_node(obj,2,lookup)
 
 		self.writel(S_NODES, 1, '</visual_scene>')
 		self.writel(S_NODES, 0, '</library_visual_scenes>')
 
 	def export_asset(self):
-
-
 		self.writel(S_ASSET, 0, '<asset>')
-		# Why is this time stuff mandatory?, no one could care less...
 		self.writel(S_ASSET, 1, '<contributor>')
-		self.writel(S_ASSET, 2, '<author> Anonymous </author>')  # Who made Collada, the FBI ?
-		self.writel(S_ASSET, 2, '<authoring_tool> Collada Exporter for Blender 2.6+, by Juan Linietsky (juan@codenix.com) </authoring_tool>')  # Who made Collada, the FBI ?
+		self.writel(S_ASSET, 2, '<author> Anonymous </author>') 
+		self.writel(S_ASSET, 2, '<authoring_tool> Collada Exporter for Blender 2.6+, by Gregery Barton (gregery20@yahoo.com.au) </authoring_tool>') 
 		self.writel(S_ASSET, 1, '</contributor>')
 		self.writel(S_ASSET, 1, '<created>' + time.strftime("%Y-%m-%dT%H:%M:%SZ     ") + '</created>')
 		self.writel(S_ASSET, 1, '<modified>' + time.strftime("%Y-%m-%dT%H:%M:%SZ") + '</modified>')
@@ -1384,193 +1351,184 @@ class DaeExporter:
 
 	def export_animation_transform_channel(self, target, keys, matrices=True):
 
-		frame_total = len(keys)
-		anim_id = self.new_id("anim")
-		self.writel(S_ANIM, 1, '<animation id="' + anim_id + '">')
-		source_frames = ""
-		source_transforms = ""
-		source_interps = ""
+		frame_total=len(keys)
+		anim_id=target+"-anim"
+		self.writel(S_ANIM,1,'<animation id="'+anim_id+'">')
 
-		for k in keys:
-			source_frames += " " + str(k[0])
-			if (matrices):
-				source_transforms += " " + strmtx(k[1])
-			else:
-				source_transforms += " " + str(k[1])
+		source_frames=" ".join([str(k[0]) for k in keys])
+		if (matrices):
+			source_matrix=" ".join([strmtx(k[1]['matrix']) for k in keys])
+			source_scale=" ".join([str(e) for v in [k[1]['scale'] for k in keys] for e in v])
+		else:
+			source_value = " ".join([str(k[1]) for k in keys])
 
-			source_interps += " LINEAR"
-
+		source_interps =" ".join([(" LINEAR ")*len(keys)]) 
 
 		# Time Source
-		self.writel(S_ANIM, 2, '<source id="' + anim_id + '-input">')
-		self.writel(S_ANIM, 3, '<float_array id="' + anim_id + '-input-array" count="' + str(frame_total) + '">' + source_frames + '</float_array>')
-		self.writel(S_ANIM, 3, '<technique_common>')
-		self.writel(S_ANIM, 4, '<accessor source="#' + anim_id + '-input-array" count="' + str(frame_total) + '" stride="1">')
-		self.writel(S_ANIM, 5, '<param name="TIME" type="float"/>')
-		self.writel(S_ANIM, 4, '</accessor>')
-		self.writel(S_ANIM, 3, '</technique_common>')
-		self.writel(S_ANIM, 2, '</source>')
+		self.writel(S_ANIM,2,'<source id="'+anim_id+'-input">')
+		self.writel(S_ANIM,3,'<float_array id="'+anim_id+'-input-array" count="'+str(frame_total)+'">'+source_frames+'</float_array>')
+		self.writel(S_ANIM,3,'<technique_common>')
+		self.writel(S_ANIM,4,'<accessor source="#'+anim_id+'-input-array" count="'+str(frame_total)+'" stride="1">')
+		self.writel(S_ANIM,5,'<param name="TIME" type="float"/>')
+		self.writel(S_ANIM,4,'</accessor>')
+		self.writel(S_ANIM,3,'</technique_common>')
+		self.writel(S_ANIM,2,'</source>')
 
 		if (matrices):
 			# Transform Source
-			self.writel(S_ANIM, 2, '<source id="' + anim_id + '-transform-output">')
-			self.writel(S_ANIM, 3, '<float_array id="' + anim_id + '-transform-output-array" count="' + str(frame_total * 16) + '">' + source_transforms + '</float_array>')
-			self.writel(S_ANIM, 3, '<technique_common>')
-			self.writel(S_ANIM, 4, '<accessor source="#' + anim_id + '-transform-output-array" count="' + str(frame_total) + '" stride="16">')
-			self.writel(S_ANIM, 5, '<param name="TRANSFORM" type="float4x4"/>')
-			self.writel(S_ANIM, 4, '</accessor>')
-			self.writel(S_ANIM, 3, '</technique_common>')
-			self.writel(S_ANIM, 2, '</source>')
+			self.writel(S_ANIM,2,'<source id="'+anim_id+'-matrix-output">')
+			self.writel(S_ANIM,3,'<float_array id="'+anim_id+'-matrix-output-array" count="'+str(frame_total*16)+'">'+source_matrix+'</float_array>')
+			self.writel(S_ANIM,3,'<technique_common>')
+			self.writel(S_ANIM,4,'<accessor source="#'+anim_id+'-matrix-output-array" count="'+str(frame_total)+'" stride="16">')
+			self.writel(S_ANIM,5,'<param name="TRANSFORM" type="float4x4"/>')
+			self.writel(S_ANIM,4,'</accessor>')
+			self.writel(S_ANIM,3,'</technique_common>')
+			self.writel(S_ANIM,2,'</source>')
+			
+			# Scale Source
+			self.writel(S_ANIM,2,'<source id="'+anim_id+'-scale-output">')
+			self.writel(S_ANIM,3,'<float_array id="'+anim_id+'-scale-output-array" count="'+str(frame_total*3)+'">'+source_scale+'</float_array>')
+			self.writel(S_ANIM,3,'<technique_common>')
+			self.writel(S_ANIM,4,'<accessor source="#'+anim_id+'-scale-output-array" count="'+str(frame_total)+'" stride="3">')
+			self.writel(S_ANIM,5,'<param name="SCALE" type="float"/>')
+			self.writel(S_ANIM,4,'</accessor>')
+			self.writel(S_ANIM,3,'</technique_common>')
+			self.writel(S_ANIM,2,'</source>')
 		else:
 			# Value Source
-			self.writel(S_ANIM, 2, '<source id="' + anim_id + '-transform-output">')
-			self.writel(S_ANIM, 3, '<float_array id="' + anim_id + '-transform-output-array" count="' + str(frame_total) + '">' + source_transforms + '</float_array>')
-			self.writel(S_ANIM, 3, '<technique_common>')
-			self.writel(S_ANIM, 4, '<accessor source="#' + anim_id + '-transform-output-array" count="' + str(frame_total) + '" stride="1">')
-			self.writel(S_ANIM, 5, '<param name="X" type="float"/>')
-			self.writel(S_ANIM, 4, '</accessor>')
-			self.writel(S_ANIM, 3, '</technique_common>')
-			self.writel(S_ANIM, 2, '</source>')
+			self.writel(S_ANIM,2,'<source id="'+anim_id+'-transform-output">')
+			self.writel(S_ANIM,3,'<float_array id="'+anim_id+'-transform-output-array" count="'+str(frame_total)+'">'+source_value+'</float_array>')
+			self.writel(S_ANIM,3,'<technique_common>')
+			self.writel(S_ANIM,4,'<accessor source="#'+anim_id+'-transform-output-array" count="'+str(frame_total)+'" stride="1">')
+			self.writel(S_ANIM,5,'<param name="X" type="float"/>')
+			self.writel(S_ANIM,4,'</accessor>')
+			self.writel(S_ANIM,3,'</technique_common>')
+			self.writel(S_ANIM,2,'</source>')
 
 		# Interpolation Source
-		self.writel(S_ANIM, 2, '<source id="' + anim_id + '-interpolation-output">')
-		self.writel(S_ANIM, 3, '<Name_array id="' + anim_id + '-interpolation-output-array" count="' + str(frame_total) + '">' + source_interps + '</Name_array>')
-		self.writel(S_ANIM, 3, '<technique_common>')
-		self.writel(S_ANIM, 4, '<accessor source="#' + anim_id + '-interpolation-output-array" count="' + str(frame_total) + '" stride="1">')
-		self.writel(S_ANIM, 5, '<param name="INTERPOLATION" type="Name"/>')
-		self.writel(S_ANIM, 4, '</accessor>')
-		self.writel(S_ANIM, 3, '</technique_common>')
-		self.writel(S_ANIM, 2, '</source>')
+		self.writel(S_ANIM,2,'<source id="'+anim_id+'-interpolation-output">')
+		self.writel(S_ANIM,3,'<Name_array id="'+anim_id+'-interpolation-output-array" count="'+str(frame_total)+'">'+source_interps+'</Name_array>')
+		self.writel(S_ANIM,3,'<technique_common>')
+		self.writel(S_ANIM,4,'<accessor source="#'+anim_id+'-interpolation-output-array" count="'+str(frame_total)+'" stride="1">')
+		self.writel(S_ANIM,5,'<param name="INTERPOLATION" type="Name"/>')
+		self.writel(S_ANIM,4,'</accessor>')
+		self.writel(S_ANIM,3,'</technique_common>')
+		self.writel(S_ANIM,2,'</source>')
 
-		self.writel(S_ANIM, 2, '<sampler id="' + anim_id + '-sampler">')
-		self.writel(S_ANIM, 3, '<input semantic="INPUT" source="#' + anim_id + '-input"/>')
-		self.writel(S_ANIM, 3, '<input semantic="OUTPUT" source="#' + anim_id + '-transform-output"/>')
-		self.writel(S_ANIM, 3, '<input semantic="INTERPOLATION" source="#' + anim_id + '-interpolation-output"/>')
-		self.writel(S_ANIM, 2, '</sampler>')
+		self.writel(S_ANIM,2,'<sampler id="'+anim_id+'-matrix-sampler">')
+		self.writel(S_ANIM,3,'<input semantic="INPUT" source="#'+anim_id+'-input"/>')
+		self.writel(S_ANIM,3,'<input semantic="OUTPUT" source="#'+anim_id+'-matrix-output"/>')
+		self.writel(S_ANIM,3,'<input semantic="INTERPOLATION" source="#'+anim_id+'-interpolation-output"/>')
+		self.writel(S_ANIM,2,'</sampler>')
+
+		self.writel(S_ANIM,2,'<sampler id="'+anim_id+'-scale-sampler">')
+		self.writel(S_ANIM,3,'<input semantic="INPUT" source="#'+anim_id+'-input"/>')
+		self.writel(S_ANIM,3,'<input semantic="OUTPUT" source="#'+anim_id+'-scale-output"/>')
+		self.writel(S_ANIM,3,'<input semantic="INTERPOLATION" source="#'+anim_id+'-interpolation-output"/>')
+		self.writel(S_ANIM,2,'</sampler>')
+		
 		if (matrices):
-			self.writel(S_ANIM, 2, '<channel source="#' + anim_id + '-sampler" target="' + target + '/transform"/>')
+			self.writel(S_ANIM,2,'<channel source="#'+anim_id+'-matrix-sampler" target="'+target+'/transform"/>')
+			self.writel(S_ANIM,2,'<channel source="#'+anim_id+'-scale-sampler" target="'+target+'/scale"/>')
 		else:
-			self.writel(S_ANIM, 2, '<channel source="#' + anim_id + '-sampler" target="' + target + '"/>')
-		self.writel(S_ANIM, 1, '</animation>')
+			self.writel(S_ANIM,2,'<channel source="#'+anim_id+'-sampler" target="'+target+'"/>')
+		self.writel(S_ANIM,1,'</animation>')
 
 		return [anim_id]
 
+	def export_animation(self, start, end, lookup,allowed=None):
 
-	def export_animation(self, start, end, allowed=None):
-
-		# Blender -> Collada frames needs a little work
-		# Collada starts from 0, blender usually from 1
-		# The last frame must be included also
+		#Blender -> Collada frames needs a little work
+		#Collada starts from 0, blender usually from 1
+		#The last frame must be included also
 
 		frame_orig = self.scene.frame_current
 
 		frame_len = 1.0 / self.scene.render.fps
-		frame_total = end - start + 1
 		frame_sub = 0
-		if (start > 0):
-			frame_sub = start * frame_len
+		if (start>0):
+			frame_sub=start*frame_len
 
 		tcn = []
-		xform_cache = {}
-		blend_cache = {}
+		xform_cache={}
+		blend_cache={}
 		# Change frames first, export objects last
 		# This improves performance enormously
 
-		# print("anim from: "+str(start)+" to "+str(end)+" allowed: "+str(allowed))
-		for t in range(start, end + 1):
+		for t in range(start,end+1):
 			self.scene.frame_set(t)
 			key = t * frame_len - frame_sub
-# 			print("Export Anim Frame "+str(t)+"/"+str(self.scene.frame_end+1))
 
 			for node in self.scene.objects:
 
 				if (not node in self.valid_nodes):
 					continue
-				if (allowed != None and not (node in allowed)):
-					if (node.type == "MESH" and node.data != None and (node in self.armature_for_morph) and (self.armature_for_morph[node] in allowed)):
-						pass  # all good you pass with flying colors for morphs inside of action
+				if (allowed!=None and not (node in allowed)):
+					if (node.type=="MESH" and node.data!=None and (node in self.armature_for_morph) and (self.armature_for_morph[node] in allowed)):
+						pass #all good you pass with flying colors for morphs inside of action
 					else:
-						# print("fail "+str((node in self.armature_for_morph)))
-						continue
-				if (node.type == "MESH" and node.data != None and node.data.shape_keys != None and (node.data in self.mesh_cache) and len(node.data.shape_keys.key_blocks)):
-					target = self.mesh_cache[node.data]["morph_id"]
+						continue 
+				if ((node.data != None) and (node.data.name in lookup["morph"])):
+					target = lookup["morph"][node.data.name]
 					for i in range(len(node.data.shape_keys.key_blocks)):
 
-						if (i == 0):
+						if (i==0):
 							continue
 
-						name = target + "-morph-weights(" + str(i - 1) + ")"
+						name=target+"-morph-weights("+str(i-1)+")"
 						if (not (name in blend_cache)):
-							blend_cache[name] = []
+							blend_cache[name]=[]
 
-						blend_cache[name].append((key, node.data.shape_keys.key_blocks[i].value))
+						blend_cache[name].append( (key,node.data.shape_keys.key_blocks[i].value) )
 
 
-				if (node.type == "MESH" and node.parent and node.parent.type == "ARMATURE"):
+				if (node.type=="MESH" and node.parent and node.parent.type=="ARMATURE"):
 
-					continue  # In Collada, nodes that have skin modifier must not export animation, animate the skin instead.
+					continue #In Collada, nodes that have skin modifier must not export animation, animate the skin instead.
 
-				if (len(node.constraints) > 0 or node.animation_data != None):
-					# If the node has constraints, or animation data, then export a sampled animation track
-					name = self.validate_id(node.name)
+				if (len(node.constraints)>0 or node.animation_data!=None):
+					#If the node has constraints, or animation data, then export a sampled animation track
+					name=node.name
 					if (not (name in xform_cache)):
-						xform_cache[name] = []
+						xform_cache[name]=[]
 
-					mtx = node.matrix_world.copy()
-					if (node.parent):
-						mtx = node.parent.matrix_world.inverted() * mtx
+					transform=self.get_node_world_transform(node)
+					xform_cache[name].append( (key,transform) )
 
-					xform_cache[name].append((key, mtx))
-
-				if (node.type == "ARMATURE"):
-					# All bones exported for now
+				if (node.type=="ARMATURE"):
+					#All bones exported for now
 
 					for bone in node.data.bones:
 
-						bone_name = self.skeleton_info[node]["bone_ids"][bone]
+						bone_name=self.skeleton_info[node]["bone_ids"][bone]
 
 						if (not (bone_name in xform_cache)):
-							# print("has bone: "+bone_name)
-							xform_cache[bone_name] = []
+							xform_cache[bone_name]=[]
 
 						posebone = node.pose.bones[bone.name]
-						parent_posebone = None
-
-						mtx = posebone.matrix.copy()
-						if (bone.parent):
-							parent_posebone = node.pose.bones[bone.parent.name]
-							parent_invisible = False
-
-							for i in range(3):
-								if (parent_posebone.scale[i] == 0.0):
-								    parent_invisible = True
-
-							if (not parent_invisible):
-								mtx = parent_posebone.matrix.inverted() * mtx
-
-
-						xform_cache[bone_name].append((key, mtx))
+						transform = self.get_posebone_transform(posebone)
+						xform_cache[bone_name].append( (key,transform) )
 
 		self.scene.frame_set(frame_orig)
 
-		# export animation xml
+		#export animation xml
 		for nid in xform_cache:
-			tcn += self.export_animation_transform_channel(nid, xform_cache[nid], True)
+			tcn+=self.export_animation_transform_channel(nid,xform_cache[nid],True)
 		for nid in blend_cache:
-			tcn += self.export_animation_transform_channel(nid, blend_cache[nid], False)
+			tcn+=self.export_animation_transform_channel(nid,blend_cache[nid],False)
 
 		return tcn
 
-	def export_animations(self):
+	def export_animations(self,lookup):
 		tmp_mat = []
 		for s in self.skeletons:
 			tmp_bone_mat = []
 			for bone in s.pose.bones:
 				tmp_bone_mat.append(Matrix(bone.matrix_basis))
 				bone.matrix_basis = Matrix()
-			tmp_mat.append([Matrix(s.matrix_local), tmp_bone_mat])
+			tmp_mat.append([Matrix(s.matrix_local),tmp_bone_mat])
 
-		self.writel(S_ANIM, 0, '<library_animations>')
+		self.writel(S_ANIM,0,'<library_animations>')
 
 
 		if (self.config["use_anim_action_all"] and len(self.skeletons)):
@@ -1582,140 +1540,167 @@ class DaeExporter:
 					cached_actions[s] = s.animation_data.action.name
 
 
-			self.writel(S_ANIM_CLIPS, 0, '<library_animation_clips>')
+			self.writel(S_ANIM_CLIPS,0,'<library_animation_clips>')
 
 			for x in bpy.data.actions[:]:
-				if x.users == 0 or x in self.action_constraints:
+				if x.users==0 or x in self.action_constraints:
 					continue
 				if (self.config["use_anim_skip_noexp"] and x.name.endswith("-noexp")):
 					continue
 
-				bones = []
-				# find bones used
+				bones=[]
+				#find bones used
 				for p in x.fcurves:
 					dp = str(p.data_path)
 					base = "pose.bones[\""
-					if (dp.find(base) == 0):
-						dp = dp[len(base):]
-						if (dp.find('"') != -1):
-							dp = dp[:dp.find('"')]
+					if (dp.find(base)==0):
+						dp=dp[len(base):]
+						if (dp.find('"')!=-1):
+							dp=dp[:dp.find('"')]
 							if (not dp in bones):
 								bones.append(dp)
 
-				allowed_skeletons = []
-				for i, y in enumerate(self.skeletons):
+				allowed_skeletons=[]
+				for i,y in enumerate(self.skeletons):
 					if (y.animation_data):
 						for z in y.pose.bones:
 							if (z.bone.name in bones):
 								if (not y in allowed_skeletons):
 									allowed_skeletons.append(y)
-						y.animation_data.action = x;
+						y.animation_data.action=x;
 
 						y.matrix_local = tmp_mat[i][0]
-						for j, bone in enumerate(s.pose.bones):
+						for j,bone in enumerate(s.pose.bones):
 							bone.matrix_basis = Matrix()
 
 
-				# print("allowed skeletons "+str(allowed_skeletons))
+				#print("allowed skeletons "+str(allowed_skeletons))
 
-				# print(str(x))
+				#print(str(x))
 
-				tcn = self.export_animation(int(x.frame_range[0]), int(x.frame_range[1] + 0.5), allowed_skeletons)
-				framelen = (1.0 / self.scene.render.fps)
-				start = x.frame_range[0] * framelen
-				end = x.frame_range[1] * framelen
-				# print("Export anim: "+x.name)
-				self.writel(S_ANIM_CLIPS, 1, '<animation_clip name="' + x.name + '" start="' + str(start) + '" end="' + str(end) + '">')
+				tcn = self.export_animation(int(x.frame_range[0]),int(x.frame_range[1]+0.5),lookup,allowed_skeletons)
+				framelen=(1.0/self.scene.render.fps)
+				start = x.frame_range[0]*framelen
+				end = x.frame_range[1]*framelen
+				#print("Export anim: "+x.name)
+				self.writel(S_ANIM_CLIPS,1,'<animation_clip name="'+x.name+'" start="'+str(start)+'" end="'+str(end)+'">')
 				for z in tcn:
-					self.writel(S_ANIM_CLIPS, 2, '<instance_animation url="#' + z + '"/>')
-				self.writel(S_ANIM_CLIPS, 1, '</animation_clip>')
-				if (len(tcn) == 0):
-					self.operator.report({'WARNING'}, 'Animation clip "' + x.name + '" contains no tracks.')
+					self.writel(S_ANIM_CLIPS,2,'<instance_animation url="#'+z+'"/>')
+				self.writel(S_ANIM_CLIPS,1,'</animation_clip>')
+				if (len(tcn)==0):
+					self.operator.report({'WARNING'},'Animation clip "'+x.name+'" contains no tracks.')
 
 
 
-			self.writel(S_ANIM_CLIPS, 0, '</library_animation_clips>')
+			self.writel(S_ANIM_CLIPS,0,'</library_animation_clips>')
 
 
-			for i, s in enumerate(self.skeletons):
-				if (s.animation_data == None):
+			for i,s in enumerate(self.skeletons):
+				if (s.animation_data==None):
 					continue
 				if s in cached_actions:
 					s.animation_data.action = bpy.data.actions[cached_actions[s]]
 				else:
 					s.animation_data.action = None
-					for j, bone in enumerate(s.pose.bones):
+					for j,bone in enumerate(s.pose.bones):
 						bone.matrix_basis = tmp_mat[i][1][j]
 
 		else:
-			self.export_animation(self.scene.frame_start, self.scene.frame_end)
+			self.export_animation(self.scene.frame_start,self.scene.frame_end,lookup)
 
 
 
-		self.writel(S_ANIM, 0, '</library_animations>')
+		self.writel(S_ANIM,0,'</library_animations>')
+
+	def remove_export_meshes(self):
+		for me in self.meshes_to_clear:
+			me.free_normals_split()
+			bpy.data.meshes.remove(me)
+		
 
 	def export(self):
-
-		self.writel(S_GEOM, 0, '<library_geometries>')
-		self.writel(S_CONT, 0, '<library_controllers>')
-		self.writel(S_CAMS, 0, '<library_cameras>')
-		self.writel(S_LAMPS, 0, '<library_lights>')
-		self.writel(S_IMGS, 0, '<library_images>')
-		self.writel(S_MATS, 0, '<library_materials>')
-		self.writel(S_FX, 0, '<library_effects>')
-
-
-		self.skeletons = []
-		self.action_constraints = []
-		self.export_asset()
-		self.export_materials()
-		self.export_scene()
-
-		self.writel(S_GEOM, 0, '</library_geometries>')
-
-		# morphs always go before skin controllers
-		if S_MORPH in self.sections:
-			for l in self.sections[S_MORPH]:
-				self.writel(S_CONT, 0, l)
-			del self.sections[S_MORPH]
-
-		# morphs always go before skin controllers
-		if S_SKIN in self.sections:
-			for l in self.sections[S_SKIN]:
-				self.writel(S_CONT, 0, l)
-			del self.sections[S_SKIN]
-
-		self.writel(S_CONT, 0, '</library_controllers>')
-		self.writel(S_CAMS, 0, '</library_cameras>')
-		self.writel(S_LAMPS, 0, '</library_lights>')
-		self.writel(S_IMGS, 0, '</library_images>')
-		self.writel(S_MATS, 0, '</library_materials>')
-		self.writel(S_FX, 0, '</library_effects>')
-
-		if (self.config["use_anim"]):
-		    self.export_animations()
-
 		try:
-			f = open(self.path, "wb")
-		except:
-			return False
+			self.writel(S_GEOM, 0, '<library_geometries>')
+			self.writel(S_CONT, 0, '<library_controllers>')
+			self.writel(S_CAMS, 0, '<library_cameras>')
+			self.writel(S_LAMPS, 0, '<library_lights>')
+			self.writel(S_IMGS, 0, '<library_images>')
+			self.writel(S_MATS, 0, '<library_materials>')
+			self.writel(S_FX, 0, '<library_effects>')
+	
+			
+			self.get_valid_nodes()
+			self.skeletons = []
+			self.action_constraints = []
+			self.export_asset()
+			material_lookup=self.export_materials()
+			mesh_lookup,geometry_morphs,material_bind_lookup=self.export_meshes()
+			camera_lookup=self.export_cameras()
+			light_lookup=self.export_lights()
+			morph_lookup=self.export_morph_controllers(mesh_lookup, geometry_morphs)
+			skin_controller_lookup=self.export_skin_controllers(mesh_lookup,morph_lookup)
 
-		f.write(bytes('<?xml version="1.0" encoding="utf-8"?>\n', "UTF-8"))
-		f.write(bytes('<COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">\n', "UTF-8"))
+			lookup={
+				"material":material_lookup,
+				"mesh":mesh_lookup,
+				"geometry_morphs":geometry_morphs,
+				"camera":camera_lookup,
+				"light":light_lookup,
+				"morph":morph_lookup,
+				"skin_controller":skin_controller_lookup,
+				"material_bind": material_bind_lookup}
+			
+			self.export_scene(lookup)
 
-
-		s = []
-		for x in self.sections.keys():
-			s.append(x)
-		s.sort()
-		for x in s:
-			for l in self.sections[x]:
-				f.write(bytes(l + "\n", "UTF-8"))
-
-		f.write(bytes('<scene>\n', "UTF-8"))
-		f.write(bytes('\t<instance_visual_scene url="#' + self.scene_name + '" />\n', "UTF-8"))
-		f.write(bytes('</scene>\n', "UTF-8"))
-		f.write(bytes('</COLLADA>\n', "UTF-8"))
+			if (self.config["use_anim"]):
+				self.export_animations(lookup)
+	
+			self.writel(S_GEOM, 0, '</library_geometries>')
+			
+			#morphs always go before skin controllers
+			if S_MORPH in self.sections:
+				for l in self.sections[S_MORPH]:
+					self.writel(S_CONT,0,l)
+				del self.sections[S_MORPH]
+	
+			#morphs always go before skin controllers
+			if S_SKIN in self.sections:
+				for l in self.sections[S_SKIN]:
+					self.writel(S_CONT,0,l)
+				del self.sections[S_SKIN]
+				
+			self.writel(S_CONT, 0, '</library_controllers>')
+			self.writel(S_CAMS, 0, '</library_cameras>')
+			self.writel(S_LAMPS, 0, '</library_lights>')
+			self.writel(S_IMGS, 0, '</library_images>')
+			self.writel(S_MATS, 0, '</library_materials>')
+			self.writel(S_FX, 0, '</library_effects>')
+	
+			try:
+				f = open(self.path, "wb")
+			except:
+				return False
+	
+			f.write(bytes('<?xml version="1.0" encoding="utf-8"?>\n', "UTF-8"))
+			f.write(bytes('<COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">\n', "UTF-8"))
+	
+	
+			s = []
+			for x in self.sections.keys():
+				s.append(x)
+			s.sort()
+			for x in s:
+				for l in self.sections[x]:
+					f.write(bytes(l + "\n", "UTF-8"))
+	
+			f.write(bytes('<scene>\n', "UTF-8"))
+			f.write(bytes('\t<instance_visual_scene url="#' + self.scene_name + '" />\n', "UTF-8"))
+			f.write(bytes('</scene>\n', "UTF-8"))
+			f.write(bytes('</COLLADA>\n', "UTF-8"))
+			
+		finally:
+			self.remove_export_meshes()
+		
 		return True
 
 	def __init__(self, path, kwargs, operator):
@@ -1725,16 +1710,13 @@ class DaeExporter:
 		self.scene_name = self.new_id("scene")
 		self.sections = {}
 		self.path = path
-		self.mesh_cache = {}
-		self.curve_cache = {}
-		self.material_cache = {}
-		self.image_cache = {}
 		self.skeleton_info = {}
 		self.config = kwargs
 		self.valid_nodes = []
-		self.armature_for_morph = {}
 		self.used_bones = []
-		self.wrongvtx_report = False
+		self.material_link_symbols = {}
+		self.meshes_to_clear = []
+		self.node_names={}
 
 
 
@@ -1746,7 +1728,6 @@ def save(operator, context,
 
 	exp = DaeExporter(filepath, kwargs, operator)
 	exp.export()
-
 
 
 	return {'FINISHED'}  # so the script wont run after we have batch exported.
