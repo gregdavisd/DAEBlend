@@ -315,7 +315,14 @@ class DaeExporter:
 
 		self.calculate_tangents(mesh)
 		
-		if (triangulate):
+		# force triangulation of the mesh has polygons with more than 3 sides
+		force_triangluation=False
+		#for polygon in mesh.polygons:
+		#	if (polygon.loop_total>4):
+		#		force_triangluation=True
+		#		break
+		
+		if (triangulate or force_triangluation):
 			bm = bmesh.new()
 			bm.from_mesh(mesh)
 			bmesh.ops.triangulate(bm, faces=bm.faces)
@@ -658,9 +665,9 @@ class DaeExporter:
 		if (has_normals):
 			self.writel(S_GEOM, 3, '<source id="' + mesh_id + '-normals">')
 			float_values = " ".join([str(c) for v in [[v.x, v.y, v.z] for v in normals] for c in v])
-			self.writel(S_GEOM, 4, '<float_array id="' + mesh_id + '-normals-array" count="' + str(len(vertices) * 3) + '">' + float_values + '</float_array>')
+			self.writel(S_GEOM, 4, '<float_array id="' + mesh_id + '-normals-array" count="' + str(len(normals) * 3) + '">' + float_values + '</float_array>')
 			self.writel(S_GEOM, 4, '<technique_common>')
-			self.writel(S_GEOM, 4, '<accessor source="#' + mesh_id + '-normals-array" count="' + str(len(vertices)) + '" stride="3">')
+			self.writel(S_GEOM, 4, '<accessor source="#' + mesh_id + '-normals-array" count="' + str(len(normals)) + '" stride="3">')
 			self.writel(S_GEOM, 5, '<param name="X" type="float"/>')
 			self.writel(S_GEOM, 5, '<param name="Y" type="float"/>')
 			self.writel(S_GEOM, 5, '<param name="Z" type="float"/>')
