@@ -8,7 +8,7 @@ Currently exports:
 - Animation actions or the complete animation timeline
 - Rigid body collision shapes
 - Materials and textures
-- Armatures and skin deformations, including bone parenting.
+- Armatures and skin deformations, bone parenting.
 - Morph targets (shape keys)
 
 Elements are given meaningful identifiers that can be related back to the original Blender document. Relating the XML tags back to Blender helps when editing the XML document post export.
