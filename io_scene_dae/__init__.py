@@ -125,7 +125,7 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
     use_anim_action_all = BoolProperty(
             name="All Actions",
             description=("Export all actions for the first armature found in separate DAE files"),
-            default=False,
+            default=True,
             )
     use_anim_skip_noexp = BoolProperty(
 	    name="Skip (-noexp) Actions",

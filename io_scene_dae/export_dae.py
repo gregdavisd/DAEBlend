@@ -1618,10 +1618,14 @@ class DaeExporter:
 		self.writel(S_ASSET, 0, '</asset>')
 
 
-	def export_animation_transform_channel(self, target, keys, matrices=True):
+	def export_animation_transform_channel(self, target, action_name, keys, matrices=True):
 
 		frame_total = len(keys)
-		anim_id = target + "-anim"
+		if (action_name == None):
+			anim_id = target + "-anim"
+		else:
+			anim_id = action_name + "-" + target + "-anim"
+			
 		self.writel(S_ANIM, 1, '<animation id="' + anim_id + '">')
 
 		source_frames = " ".join([str(k[0]) for k in keys])
@@ -1709,7 +1713,7 @@ class DaeExporter:
 
 		return [anim_id]
 
-	def export_animation(self, start, end, lookup, allowed=None):
+	def export_animation(self, start, end, action_name, lookup, allowed=None):
 
 		# Blender -> Collada frames needs a little work
 		# Collada starts from 0, blender usually from 1
@@ -1790,9 +1794,9 @@ class DaeExporter:
 
 		# export animation xml
 		for nid in xform_cache:
-			tcn += self.export_animation_transform_channel(nid, xform_cache[nid], True)
+			tcn += self.export_animation_transform_channel(nid, action_name, xform_cache[nid], True)
 		for nid in blend_cache:
-			tcn += self.export_animation_transform_channel(nid, blend_cache[nid], False)
+			tcn += self.export_animation_transform_channel(nid, action_name, blend_cache[nid], False)
 
 		return tcn
 
@@ -1850,7 +1854,7 @@ class DaeExporter:
 						for j, bone in enumerate(s.pose.bones):
 							bone.matrix_basis = Matrix()
 
-				tcn = self.export_animation(int(x.frame_range[0]), int(x.frame_range[1] + 0.5), lookup, allowed_skeletons)
+				tcn = self.export_animation(int(x.frame_range[0]), int(x.frame_range[1] + 0.5), x.name, lookup, allowed_skeletons)
 				framelen = (1.0 / self.scene.render.fps)
 				start = x.frame_range[0] * framelen
 				end = x.frame_range[1] * framelen
@@ -1875,7 +1879,7 @@ class DaeExporter:
 						bone.matrix_basis = tmp_mat[i][1][j]
 
 		else:
-			self.export_animation(self.scene.frame_start, self.scene.frame_end, lookup)
+			self.export_animation(self.scene.frame_start, self.scene.frame_end, None, lookup)
 
 		self.writel(S_ANIM, 0, '</library_animations>')
 
@@ -1968,7 +1972,7 @@ class DaeExporter:
 	
 			f.write(bytes('<scene>\n', "UTF-8"))
 			f.write(bytes('\t<instance_visual_scene url="#' + self.scene_name + '"/>\n', "UTF-8"))
-			f.write(bytes('\t<instance_physics_scene url="#' + self.scene_name+'-physics' + '"/>\n', "UTF-8"))
+			f.write(bytes('\t<instance_physics_scene url="#' + self.scene_name + '-physics' + '"/>\n', "UTF-8"))
 			f.write(bytes('</scene>\n', "UTF-8"))
 			f.write(bytes('</COLLADA>\n', "UTF-8"))
 			
