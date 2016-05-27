@@ -18,7 +18,16 @@
 from bpy_types import Node
 from platform import node
 from mesh_inset.offset import Offset
-import nodeitems_utils
+import os
+import time
+import math  # math.pi
+import shutil
+import bpy
+import bmesh
+from mathutils import Vector, Matrix, Euler
+import itertools
+from statistics import mean
+
 
 # <pep8 compliant>
 #
@@ -48,16 +57,6 @@ http://www.khronos.org/collada/
 # Morph Targets
 # Blender native material? (?)
 
-import os
-import time
-import math  # math.pi
-import shutil
-import bpy
-import bmesh
-from mathutils import Vector, Matrix, Euler
-import itertools
-
-
 # according to collada spec, order matters
 S_ASSET = 0
 S_IMGS = 1
@@ -71,22 +70,18 @@ S_CAMS = 8
 S_LAMPS = 9
 S_ANIM_CLIPS = 10
 S_NODES = 11
-S_ANIM = 12
+S_P_MATS = 12
+S_P_MODEL = 13
+S_P_SCENE = 14
+S_ANIM = 15
 
 CMP_EPSILON = 0.0001
-
-def snap_tup(tup):
-	ret = ()
-	for x in tup:
-		ret += (x - math.fmod(x, 0.0001),)
-
-	return tup
-
 
 def strmtx(mtx):
 	return " ".join([str(e) for v in mtx for e in v])
 
 def numarr_alpha(a, mult=1.0):
+	" ".join([str(x * mult) for x in a])
 	s = " "
 	for x in a:
 		s += " " + str(x * mult)
@@ -96,11 +91,7 @@ def numarr_alpha(a, mult=1.0):
 	return s
 
 def strarr(arr):
-	s = " "
-	for x in arr:
-		s += " " + str(x)
-	s += " "
-	return s
+	return " ".join([str(e) for e in arr])
 
 class DaeExporter:
 
@@ -316,11 +307,11 @@ class DaeExporter:
 		self.calculate_tangents(mesh)
 		
 		# force triangulation of the mesh has polygons with more than 3 sides
-		force_triangluation=False
-		#for polygon in mesh.polygons:
-		#	if (polygon.loop_total>4):
-		#		force_triangluation=True
-		#		break
+		force_triangluation = False
+		# for polygon in mesh.polygons:
+		# 	if (polygon.loop_total>4):
+		# 		force_triangluation=True
+		# 		break
 		
 		if (triangulate or force_triangluation):
 			bm = bmesh.new()
@@ -450,7 +441,8 @@ class DaeExporter:
 				geometry_lookup[mesh.data.name] = mesh_id
 				valid, material_bind = self.export_mesh(mesh, mesh_id)
 				if (valid):
-					material_bind_lookup[mesh.data.name] = material_bind
+					if (len(material_bind)):
+						material_bind_lookup[mesh.data.name] = material_bind
 					morphs = self.export_mesh_morphs(mesh, mesh_id)
 					if (morphs):
 						geometry_morphs[mesh.data.name] = morphs
@@ -466,7 +458,6 @@ class DaeExporter:
 		if (mesh.shape_keys != None and len(mesh.shape_keys.key_blocks)):
 			values = []
 			morph_targets = []
-			md = None
 			for k in range(0, len(mesh.shape_keys.key_blocks)):
 				shape = node.data.shape_keys.key_blocks[k]
 				values += [shape.value]  # save value
@@ -475,7 +466,6 @@ class DaeExporter:
 			scene_show_only_shape_key = node.show_only_shape_key
 			scene_active_shape_key = node.active_shape_key_index 
 			
-			mid = self.new_id("morph")
 			for k in range(0, len(mesh.shape_keys.key_blocks)):
 
 				shape = node.data.shape_keys.key_blocks[k]
@@ -558,7 +548,7 @@ class DaeExporter:
 					else:
 						skin_controller_lookup[node.data.name] = skin_id
 					if (node.data.name in morph_lookup):
-						mesh_id = morph_lookup(node.data.name)
+						mesh_id = morph_lookup[node.data.name]
 					else:
 						mesh_id = mesh_lookup[node.data.name]
 					self.export_skin_controller(node, armature.object, mesh_id , skin_id)
@@ -737,7 +727,8 @@ class DaeExporter:
 			
 			# Every face set must have a material symbol even if no material is assigned in Blender.
 			matref = self.get_material_link_symbol(materials[m])
-			material_bind[materials[m]] = matref
+			if (materials[m] != None):
+				material_bind[materials[m]] = matref
 
 			self.writel(S_GEOM, 3, '<' + prim_type + ' count="' + str(len(surface_v_indices[m])) + '" material="' + matref + '">')  # todo material
 			if (has_vertex):
@@ -806,7 +797,7 @@ class DaeExporter:
 		self.node_names[name] = count + 1
 		return node_id
 
-	def export_armature_bone(self, bone, il, si,lookup,exported_nodes,parenting_map):
+	def export_armature_bone(self, bone, il, si, lookup, nodes_lookup, parenting_map):
 		boneid = self.get_node_id(bone.name)
 		boneidx = si["bone_count"]
 		si["bone_count"] += 1
@@ -828,28 +819,28 @@ class DaeExporter:
 
 		# export nodes that are parented to this bone
 		
-		node_children=parenting_map.get(bone.name,None)
-		if (node_children!=None):
+		node_children = parenting_map.get(bone.name, None)
+		if (node_children != None):
 			for c in node_children:
-				self.export_node(c, il, lookup, exported_nodes)
+				self.export_node(c, il, lookup, nodes_lookup)
 			
 		for c in bone.children:
-			self.export_armature_bone(c, il, si,lookup,exported_nodes,parenting_map)
+			self.export_armature_bone(c, il, si, lookup, nodes_lookup, parenting_map)
 		il -= 1
 		self.writel(S_NODES, il, '</node>')
 
 
-	def export_armature_node(self, node, il,lookup,exported_nodes):
+	def export_armature_node(self, node, il, lookup, nodes_lookup):
 		
 		# Export the rig in rest mode, this ensures that geometry attached to bones are also at the rest position
 		
-		pose_position=node.data.pose_position
-		if (pose_position=='POSE'):
-			node.data.pose_position='REST'
+		pose_position = node.data.pose_position
+		if (pose_position == 'POSE'):
+			node.data.pose_position = 'REST'
 			bpy.context.scene.update();
 		
 		try:	
-			parenting_map=self.get_armature_children_of_bones(node)
+			parenting_map = self.get_armature_children_of_bones(node)
 	
 			self.skeletons.append(node)
 	
@@ -859,7 +850,7 @@ class DaeExporter:
 			for b in armature.bones:
 				if (b.parent != None):
 					continue
-				self.export_armature_bone(b, il, self.skeleton_info[node],lookup,exported_nodes,parenting_map)
+				self.export_armature_bone(b, il, self.skeleton_info[node], lookup, nodes_lookup, parenting_map)
 	
 			if (node.pose):
 				for b in node.pose.bones:
@@ -869,8 +860,8 @@ class DaeExporter:
 		
 		finally:
 			# restore original pose position setting
-			if (pose_position!=node.data.pose_position):
-				node.data.pose_position=pose_position
+			if (pose_position != node.data.pose_position):
+				node.data.pose_position = pose_position
 				bpy.context.scene.update();							
 
 	def export_cameras(self):
@@ -1096,20 +1087,46 @@ class DaeExporter:
 		return self.transform_to_xml(self.get_node_local_transform(node))
 	
 	def transform_to_xml(self, transform):
-		transforms = [
-				self.get_matrix_transform_xml(transform["matrix"]),
-				self.get_scale_xml(transform["scale"])]
+		if (self.transform_matrix_scale):
+			transforms = [
+					self.get_matrix_transform_xml(transform["matrix"]),
+					self.get_scale_xml(transform["scale"])]
+		else:
+			transforms = [
+					self.get_matrix_transform_xml(transform["matrix"])]
+			
 		return [e for t in transforms for e in t]
+
+	def inverted_scale_matrix(self, vector):
+		matrix = Matrix.Identity(3)
+		matrix[0][0] = 1.0 / vector[0]
+		matrix[1][1] = 1.0 / vector[1]
+		matrix[2][2] = 1.0 / vector[2]
+		return matrix
+
+	def remove_matrix_scale(self, matrix, scale):
+		# multiply this matrix with an inverse of the scale without affecting the translation component
+		
+		translation = matrix.to_translation()
+		matrix3 = matrix.to_3x3()
+		inverse_scale = self.inverted_scale_matrix(scale)
+		matrix3 = inverse_scale * matrix3
+		new_matrix = matrix3.to_4x4()
+		new_matrix.translation = translation
+		return new_matrix
 		
 	def get_node_local_transform(self, node):
-		if (node.parent_type=='BONE'):
+		if (node.parent_type == 'BONE'):
 			# node.matrix_local is not in armature space, so generate a true armature space matrix from relative world matrices
-			matrix=node.parent.data.bones[node.parent_bone].matrix_local.inverted()*(node.parent.matrix_world.inverted()*node.matrix_world)
+			matrix = node.parent.data.bones[node.parent_bone].matrix_local.inverted() * (node.parent.matrix_world.inverted() * node.matrix_world)
 		else:
-			matrix=node.matrix_local
-		translation,rotation,scale=matrix.decompose()
-		matrix = Matrix.Translation(translation) * rotation.to_matrix().to_4x4()
-		return {"matrix":matrix, "scale":scale}
+			matrix = node.matrix_local
+		
+		if (self.transform_matrix_scale):
+			matrix = self.remove_matrix_scale(matrix, node.scale)
+			return {"matrix":matrix, "scale":node.scale}
+		else:
+			return {"matrix":matrix}
 		
 	def get_bone_transform(self, bone):
 		if (bone.parent != None):
@@ -1117,11 +1134,11 @@ class DaeExporter:
 		else:
 			matrix = bone.matrix_local.copy()
 		# Bones are only scaled in pose mode
-		return {"matrix":matrix, "scale":(1, 1, 1)}
-	
-	def get_bone_parented_node_transform_xml(self,armature,node):
-		return self.transform_to_xml(self.get_bone_parented_node_transform(armature,node))
-
+		if (self.transform_matrix_scale):
+			return {"matrix":matrix, "scale":(1, 1, 1)}
+		else:
+			return {"matrix":matrix}
+			
 	def get_posebone_transform(self, posebone):
 		# get posebone transform relative to its parent bone, if no parent bone then relative to the armature
 		matrix = posebone.matrix.copy()
@@ -1136,10 +1153,11 @@ class DaeExporter:
 			if (not parent_invisible):
 				matrix = posebone.parent.matrix.inverted() * matrix
 				
-		scale = posebone.scale
-		inverse_scale = Matrix.Scale(1, 4, scale).inverted()
-		matrix = inverse_scale * matrix
-		return {"matrix":matrix, "scale":scale}
+		if (self.transform_matrix_scale):
+			matrix = self.remove_matrix_scale(matrix, posebone.scale)
+			return {"matrix":matrix, "scale":posebone.scale}
+		else:
+			return {"matrix":matrix}
 		
 	def get_scale_xml(self, scale):
 		return ['<scale sid="scale">' + " ".join([str(e) for e in scale]) + '</scale>']
@@ -1150,15 +1168,17 @@ class DaeExporter:
 	def get_matrix_transform_xml(self, matrix):
 		return['<matrix sid="transform">' + strmtx(matrix) + '</matrix>']
 			
-	def export_node(self, node, il, lookup,exported_nodes):
+	def export_node(self, node, il, lookup, nodes_lookup):
 		# export a scene node as a Collada node
 		
-		if ((not node in self.valid_nodes) or (node in exported_nodes)):
-			return
-		exported_nodes.add(node);
+		# The Blender scene tree suffers from a diamond problem when a node is parented by a bone, 
+		# but also parented by the armature. So use the lookup to avoid exporting a node more than once.
 		
+		if ((not node in self.valid_nodes) or (node in nodes_lookup)):
+			return
+
 		node_id = self.get_node_id(node.name)
-		lookup["Scene_nodes"][node.name] = node_id
+		nodes_lookup[node.name] = node_id
 		
 		self.writel(S_NODES, il, '<node id="' + node_id + '" name="' + node.name + '" type="NODE">')
 		il += 1
@@ -1171,12 +1191,13 @@ class DaeExporter:
 		if (node.type == "ARMATURE"):
 			lookup["Armature"] = node_id
 			lookup["Armature_node"] = node
-			self.export_armature_node(node, il,lookup,exported_nodes)
+			self.export_armature_node(node, il, lookup, nodes_lookup)
 		elif (node.data != None):
 			if (node.data.name in lookup["skin_controller"]):
 				skin_id = lookup["skin_controller"][node.data.name]
 				self.writel(S_NODES, il, '<instance_controller url="#' + skin_id + '">')
-				self.writel(S_NODES, il + 1, '<skeleton>#' + lookup["Armature"] + '</skeleton>')
+				if (node.parent != None):
+					self.writel(S_NODES, il + 1, '<skeleton>#' + nodes_lookup[node.parent.name] + '</skeleton>')
 				self.export_material_bind(node, il, lookup)
 				self.writel(S_NODES, il, "</instance_controller>")
 			elif (node.data.name in lookup["geometry_morphs"]):
@@ -1197,26 +1218,26 @@ class DaeExporter:
 				self.writel(S_NODES, il, '<instance_light url="#' + light_id + '"/>')
 		
 		for x in node.children:
-			self.export_node(x, il, lookup,exported_nodes)
+			self.export_node(x, il, lookup, nodes_lookup)
 
 		il -= 1
 		self.writel(S_NODES, il, '</node>')
 
-	def get_armature_children_of_bones(self,armature_node):
+	def get_armature_children_of_bones(self, armature_node):
 		# get the scene nodes that are attached to the armature through bone parenting
 		
-		def get_children_of_bones(children,parenting_map):
-			if (children==None):
+		def get_children_of_bones(children, parenting_map):
+			if (children == None):
 				return
 			for child in children:
 				if (hasattr(child, "parent_bone") and (child.parent_bone != None)):
 					if (not child.parent_bone in parenting_map):
-						parenting_map[child.parent_bone]=[]
+						parenting_map[child.parent_bone] = []
 					parenting_map[child.parent_bone].append(child)
 				get_children_of_bones(child.children, parenting_map)
 						
-		parenting_map={}
-		get_children_of_bones(armature_node.children,parenting_map)
+		parenting_map = {}
+		get_children_of_bones(armature_node.children, parenting_map)
 		return parenting_map
 			
 
@@ -1274,7 +1295,7 @@ class DaeExporter:
 			)))));
 		else:
 			# Export all materials including those with fake users
-			materials = set([material for material in bpy.data.materials if material.users>0])
+			materials = set([material for material in bpy.data.materials if material.users > 0])
 				
 	
 		# get texture map images
@@ -1299,7 +1320,7 @@ class DaeExporter:
 						)))
 			
 			
-			# export library_images content
+		# export library_images content
 			
 		image_lookup = {}
 		for image in images:
@@ -1345,27 +1366,245 @@ class DaeExporter:
 						self.valid_nodes.append(n)
 					n = n.parent
 
+	def export_physics_materials(self):
+		collision_nodes = [node for node in self.valid_nodes if (node.rigid_body != None)]
+		if (not len(collision_nodes)):
+			return {}
+		
+		physics_materials_lookup = {}
+		self.writel(S_P_MATS, 0, '<library_physics_materials>')
+		for node in collision_nodes:
+			if (not node.data.name in physics_materials_lookup):
+				physics_material_id = node.data.name + '-phys_mat'
+				physics_materials_lookup[node.data.name] = physics_material_id
+				self.export_physics_material(node, physics_material_id)
+		self.writel(S_P_MATS, 0, '</library_physics_materials>')
+		return physics_materials_lookup
+	
+	def export_physics_material(self, node, physics_material_id):
+		self.writel(S_P_MATS, 1, '<physics_material id ="{}">'.format(physics_material_id))
+		self.writel(S_P_MATS, 2, '<technique_common>')
+		self.writel(S_P_MATS, 3, '<dynamic_friction>{}</dynamic_friction>'.format(node.rigid_body.friction))
+		self.writel(S_P_MATS, 3, '<static_friction>{}</static_friction>'.format(node.rigid_body.friction))
+		self.writel(S_P_MATS, 3, '<restitution>{}</restitution>'.format(node.rigid_body.restitution))
+		self.writel(S_P_MATS, 2, '</technique_common>')
+		self.writel(S_P_MATS, 2, '<extra>')
+		self.writel(S_P_MATS, 3, '<technique profile="blender">')
+		self.writel(S_P_MATS, 3, '</technique>')
+		self.writel(S_P_MATS, 2, '</extra>')
+		self.writel(S_P_MATS, 1, '</physics_material>')
+		
+	def export_physics_models(self, lookup):
+		collision_shape_nodes = [node for node in self.valid_nodes if ((node.rigid_body != None) and (node.rigid_body.collision_shape != None))]
+		if (not len(collision_shape_nodes)):
+			return
+		
+		physics_model_lookup = {}
+		self.writel(S_P_MODEL, 0, '<library_physics_models>')
+		for node in collision_shape_nodes:
+			if (not node.data.name in physics_model_lookup):
+				physics_model_id = node.data.name + '-model'
+				physics_model_lookup[node.data.name] = physics_model_id
+				self.export_physics_model(node, physics_model_id, lookup)
+		self.writel(S_P_MODEL, 0, '</library_physics_models>')
+		return physics_model_lookup
+	
+	def export_physics_model(self, node, physics_model_id, lookup):
+		
+		self.writel(S_P_MODEL, 1, '<physics_model id="{}">'.format(physics_model_id))
+		self.writel(S_P_MODEL, 2, '<rigid_body sid="{}">'.format(lookup['nodes'][node.name]))
+		self.writel(S_P_MODEL, 3, '<technique_common>')
+		self.writel(S_P_MODEL, 4, '<dynamic>{}</dynamic>'.format(str(node.rigid_body.enabled).lower()))
+		self.writel(S_P_MODEL, 4, '<mass>{}</mass>'.format(node.rigid_body.mass))
+		self.writel(S_P_MODEL, 4, '<mass_frame>')
+		self.writel(S_P_MODEL, 5, '<translate>0 0 0</translate>')
+		self.writel(S_P_MODEL, 5, '<rotate>0 0 1 0</rotate>')
+		self.writel(S_P_MODEL, 4, '</mass_frame>')
+		self.writel(S_P_MODEL, 4, '<shape>')
+		try:  # in case no physics material in the lookup
+			self.writel(S_P_MODEL, 5, '<instance_physics_material url="#{}"/>'.format(lookup['physics_material'][node.data.name]))
+		except:
+			pass  # don't need it then
+		shape_funcs = {
+					'BOX': self.export_box_shape,
+					'SPHERE': self.export_sphere_shape,
+					'CAPSULE': self.export_capsule_shape,
+					'CYLINDER': self.export_cylinder_shape,
+					'CONE': self.export_cone_shape,
+					'CONVEX_HULL': self.export_convex_hull_shape,
+					'MESH': self.export_mesh_shape}
+		try:
+			shape_funcs[node.rigid_body.collision_shape](node, 5, lookup)
+		except:
+			pass
+		self.export_collision_margin(node, 5)
+
+		self.writel(S_P_MODEL, 4, '</shape>')
+		collision_groups = [str(i) for (i, g) in enumerate(node.rigid_body.collision_groups) if g]
+		self.writel(S_P_MODEL, 3, '</technique_common>')
+		
+		self.writel(S_P_MODEL, 3, '<extra>')
+		self.writel(S_P_MODEL, 4, '<technique profile="blender">')
+		self.writel(S_P_MODEL, 5, '<linear_damping>{}</linear_damping>'.format(node.rigid_body.linear_damping))
+		self.writel(S_P_MODEL, 5, '<angular_damping>{}</angular_damping>'.format(node.rigid_body.angular_damping))
+		if(node.rigid_body.use_deactivation):
+			self.writel(S_P_MODEL, 5, '<deactivation>')
+			self.writel(S_P_MODEL, 6, '<linear_velocity>{}</linear_velocity>'.format(node.rigid_body.deactivate_linear_velocity))
+			self.writel(S_P_MODEL, 6, '<angular_velocity>{}</angular_velocity>'.format(node.rigid_body.deactivate_angular_velocity))
+			self.writel(S_P_MODEL, 6, '<start>{}</start>'.format(str(node.rigid_body.use_start_deactivated).lower()))
+			self.writel(S_P_MODEL, 5, '</deactivation>')
+			
+		if (len(collision_groups)):
+			groups_source_id = physics_model_id + "-groups_source"
+			self.writel(S_P_MODEL, 5, '<source id="{}">'.format(groups_source_id))
+			groups_array_id = groups_source_id + "-array"
+			self.writel(S_P_MODEL, 6, '<int_array id="{}" count="{}">{}</int_array>'
+					.format(groups_array_id, len(collision_groups), " ".join(collision_groups)))
+			self.writel(S_P_MODEL, 6, '<technique_common>')
+			self.writel(S_P_MODEL, 7, '<accessor source="#{}" stride="1">'.format(groups_array_id))
+			self.writel(S_P_MODEL, 8, '<param name="GROUP" type="int"/>')
+			self.writel(S_P_MODEL, 7, '</accessor>')
+			self.writel(S_P_MODEL, 6, '</technique_common>')
+			self.writel(S_P_MODEL, 5, '</source>')
+			self.writel(S_P_MODEL, 5, '<collision_groups>')
+			self.writel(S_P_MODEL, 6, '<input semantic="COLLISION_GROUP" source="#{}"/>'.format(groups_source_id))
+			self.writel(S_P_MODEL, 5, '</collision_groups>')
+
+		self.writel(S_P_MODEL, 4, '</technique>')
+		self.writel(S_P_MODEL, 3, '</extra>')
+			
+		self.writel(S_P_MODEL, 2, '</rigid_body>')
+		self.writel(S_P_MODEL, 1, '</physics_model>')
+
+	def get_node_dimensions(self, node):
+		# get dimensions before scaling
+		return [d / s for (d, s)in zip(node.dimensions, node.scale)]
+	
+	def export_collision_margin(self, node, il):
+		if (node.rigid_body.use_margin or node.rigid_body.collision_shape == 'CONE'):
+			self.writel(
+					S_P_MODEL, il,
+					'<collision_margin>{}</collision_margin>'
+					.format(node.rigid_body.collision_margin))
+				
+	def export_box_shape(self, node, il, lookup):
+		dimensions = self.get_node_dimensions(node)
+		self.writel(S_P_MODEL, il, "<box>")
+		self.writel(S_P_MODEL, il + 1, "<half_extents>{} {} {}</half_extents>".format(
+			dimensions[0] / 2.0, dimensions[1] / 2.0, dimensions[2] / 2.0))
+		self.writel(S_P_MODEL, il, "</box>")
+		
+	def export_sphere_shape(self, node, il, lookup):
+		dimensions = self.get_node_dimensions(node)
+		self.writel(S_P_MODEL, il, "<sphere>")
+		radius = max(dimensions) / 2.0
+		self.writel(S_P_MODEL, il + 1, "<radius>{}</radius>".format(radius))
+		self.writel(S_P_MODEL, il, "</sphere>")
+		
+	def export_capsule_shape(self, node, il, lookup):
+		dimensions = self.get_node_dimensions(node)
+		self.writel(S_P_MODEL, il, "<capsule>")
+		self.writel(S_P_MODEL, il + 1, "<height>{}</height>".format(dimensions[2]))
+		radius = max(dimensions[0], dimensions[1]) / 2.0
+		self.writel(S_P_MODEL, il + 1, "<radius>{} {} {}</radius>".format(radius, radius, radius))
+		self.writel(S_P_MODEL, il, "</capsule>")	
+
+	def export_cylinder_shape(self, node, il, lookup):
+		dimensions = self.get_node_dimensions(node)
+		self.writel(S_P_MODEL, il, "<cylinder>")
+		self.writel(S_P_MODEL, il + 1, "<height>{}</height>".format(dimensions[2]))
+		radius = max(dimensions[0], dimensions[1]) / 2.0
+		self.writel(S_P_MODEL, il + 1, "<radius>{} {}</radius>".format(radius, radius))
+		self.writel(S_P_MODEL, il, "</cylinder>")	
+		
+	def export_cone_shape(self, node, il, lookup):
+		dimensions = self.get_node_dimensions(node)
+		self.writel(S_P_MODEL, il, "<cone>")
+		self.writel(S_P_MODEL, il + 1, "<height>{}</height>".format(dimensions[2]))
+		radius = max(dimensions[0], dimensions[1]) / 2.0
+		self.writel(S_P_MODEL, il + 1, "<radius>{} {}</radius>".format(radius, radius))
+		self.writel(S_P_MODEL, il, "</cone>")	
+
+	def get_physics_mesh_id(self, node, lookup):
+		
+		# get the source for building a physics mesh based on the mesh_source setting
+		try:
+			if (node.rigid_body.mesh_source == 'BASE'):
+				return lookup['mesh'][node.data.name]
+			if (node.rigid_body.mesh_source == 'DEFORM'):
+				if (node.data.name in lookup['skin_controller']):
+					return lookup['skin_controller'][node.data.name]
+				if (node.data.name in lookup['morph']):
+					return lookup['morph'][node.data.name]
+				return lookup['mesh'][node.data.name]
+			if (node.rigid_body.mesh_source == 'FINAL'):
+				return lookup['nodes'][node.name]
+		except:
+			return None
+		
+	def export_convex_hull_shape(self, node, il, lookup):
+		mesh_id = self.get_physics_mesh_id(node, lookup)
+		if (mesh_id != None):
+			self.writel(S_P_MODEL, il, '<convex_mesh convex_hull_of="#{}"/>'.format(mesh_id))
+		
+	def export_mesh_shape(self, node, il, lookup):
+		mesh_id = self.get_physics_mesh_id(node, lookup)
+		if (mesh_id != None):
+			self.writel(S_P_MODEL, il, '<instance_geometry url="#{}">'.format(mesh_id))
+		
+		
+	def export_physics_scene(self, lookup):
+		if (bpy.context.scene.rigidbody_world == None):
+			return
+		
+		self.writel(S_P_SCENE, 0, '<library_physics_scenes>')
+		self.writel(S_P_SCENE, 1, '<physics_scene id="{}">'.format(self.scene_name + '-physics'))
+		self.writel(S_P_SCENE, 2, '<technique_common>')
+		self.writel(S_P_SCENE, 3, '<gravity>{}</gravity>'.format(" ".join([str(e) for e in bpy.context.scene.gravity])))
+		self.writel(S_P_SCENE, 3, '<time_step>{}</time_step>'.format(1.0 / bpy.context.scene.rigidbody_world.steps_per_second))
+		self.writel(S_P_SCENE, 2, '</technique_common>')
+		self.writel(S_P_SCENE, 2, '<extra>')
+		self.writel(S_P_SCENE, 3, '<technique profile="blender">')
+		self.writel(S_P_SCENE, 4, '<time_scale>{}</time_scale>'.format(bpy.context.scene.rigidbody_world.time_scale))
+		self.writel(S_P_SCENE, 4, '<solver_iterations>{}</solver_iterations>'.format(bpy.context.scene.rigidbody_world.solver_iterations))
+		self.writel(S_P_SCENE, 4, '<split_impulse>{}</split_impulse>'.format(str(bpy.context.scene.rigidbody_world.use_split_impulse).lower()))
+		self.writel(S_P_SCENE, 4, '<weights>')
+		self.writel(S_P_SCENE, 5, '<all>{}</all>'.format(bpy.context.scene.rigidbody_world.effector_weights.all))
+		self.writel(S_P_SCENE, 5, '<gravity>{}</gravity>'.format(bpy.context.scene.rigidbody_world.effector_weights.gravity))
+		self.writel(S_P_SCENE, 5, '<force>{}</force>'.format(bpy.context.scene.rigidbody_world.effector_weights.force))
+		self.writel(S_P_SCENE, 5, '<harmonic>{}</harmonic>'.format(bpy.context.scene.rigidbody_world.effector_weights.harmonic))
+		self.writel(S_P_SCENE, 5, '<vortex>{}</vortex>'.format(bpy.context.scene.rigidbody_world.effector_weights.vortex))
+		self.writel(S_P_SCENE, 5, '<charge>{}</charge>'.format(bpy.context.scene.rigidbody_world.effector_weights.charge))
+		self.writel(S_P_SCENE, 5, '<magnetic>{}</magnetic>'.format(bpy.context.scene.rigidbody_world.effector_weights.magnetic))
+		self.writel(S_P_SCENE, 5, '<lennardjones>{}</lennardjones>'.format(bpy.context.scene.rigidbody_world.effector_weights.lennardjones))
+		self.writel(S_P_SCENE, 5, '<wind>{}</wind>'.format(bpy.context.scene.rigidbody_world.effector_weights.wind))
+		self.writel(S_P_SCENE, 5, '<turbulence>{}</turbulence>'.format(bpy.context.scene.rigidbody_world.effector_weights.turbulence))
+		self.writel(S_P_SCENE, 5, '<curve_guide>{}</curve_guide>'.format(bpy.context.scene.rigidbody_world.effector_weights.curve_guide))
+		self.writel(S_P_SCENE, 5, '<drag>{}</drag>'.format(bpy.context.scene.rigidbody_world.effector_weights.drag))
+		self.writel(S_P_SCENE, 5, '<texture>{}</texture>'.format(bpy.context.scene.rigidbody_world.effector_weights.texture))
+		self.writel(S_P_SCENE, 5, '<boid>{}</boid>'.format(bpy.context.scene.rigidbody_world.effector_weights.boid))
+		self.writel(S_P_SCENE, 5, '<smokeflow>{}</smokeflow>'.format(bpy.context.scene.rigidbody_world.effector_weights.smokeflow))
+		self.writel(S_P_SCENE, 4, '</weights>')
+		self.writel(S_P_SCENE, 3, '</technique>')
+		self.writel(S_P_SCENE, 2, '</extra>')
+		self.writel(S_P_SCENE, 1, '</physics_scene>')
+		self.writel(S_P_SCENE, 0, '</library_physics_scenes>')
 		
 	def export_scene(self, lookup):
 
-		lookup["Armature"] = ""
-		lookup["Scene_nodes"] = {}
-		
-		# The Blender scene tree suffers from a diamond problem when a node is parented by a bone, 
-		# but also parented by the armature. So need to keep track of which nodes have been previously
-		# exported to avoid exporting both through the two different parenting relationships.
-		exported_nodes=set()
-		
+		nodes_lookup = {}
+				
 		self.writel(S_NODES, 0, '<library_visual_scenes>')
 		self.writel(S_NODES, 1, '<visual_scene id="' + self.scene_name + '" name="scene">')
 
 		for obj in self.valid_nodes:
 			if (obj.parent == None):
-				self.export_node(obj, 2, lookup,exported_nodes)
+				self.export_node(obj, 2, lookup, nodes_lookup)
 
 		self.writel(S_NODES, 1, '</visual_scene>')
 		self.writel(S_NODES, 0, '</library_visual_scenes>')
-
+		return nodes_lookup
+	
 	def export_asset(self):
 		self.writel(S_ASSET, 0, '<asset>')
 		self.writel(S_ASSET, 1, '<contributor>')
@@ -1388,7 +1627,8 @@ class DaeExporter:
 		source_frames = " ".join([str(k[0]) for k in keys])
 		if (matrices):
 			source_matrix = " ".join([strmtx(k[1]['matrix']) for k in keys])
-			source_scale = " ".join([str(e) for v in [k[1]['scale'] for k in keys] for e in v])
+			if (self.transform_matrix_scale):
+				source_scale = " ".join([str(e) for v in [k[1]['scale'] for k in keys] for e in v])
 		else:
 			source_value = " ".join([str(k[1]) for k in keys])
 
@@ -1416,14 +1656,15 @@ class DaeExporter:
 			self.writel(S_ANIM, 2, '</source>')
 			
 			# Scale Source
-			self.writel(S_ANIM, 2, '<source id="' + anim_id + '-scale-output">')
-			self.writel(S_ANIM, 3, '<float_array id="' + anim_id + '-scale-output-array" count="' + str(frame_total * 3) + '">' + source_scale + '</float_array>')
-			self.writel(S_ANIM, 3, '<technique_common>')
-			self.writel(S_ANIM, 4, '<accessor source="#' + anim_id + '-scale-output-array" count="' + str(frame_total) + '" stride="3">')
-			self.writel(S_ANIM, 5, '<param name="SCALE" type="float"/>')
-			self.writel(S_ANIM, 4, '</accessor>')
-			self.writel(S_ANIM, 3, '</technique_common>')
-			self.writel(S_ANIM, 2, '</source>')
+			if (self.transform_matrix_scale):
+				self.writel(S_ANIM, 2, '<source id="' + anim_id + '-scale-output">')
+				self.writel(S_ANIM, 3, '<float_array id="' + anim_id + '-scale-output-array" count="' + str(frame_total * 3) + '">' + source_scale + '</float_array>')
+				self.writel(S_ANIM, 3, '<technique_common>')
+				self.writel(S_ANIM, 4, '<accessor source="#' + anim_id + '-scale-output-array" count="' + str(frame_total) + '" stride="3">')
+				self.writel(S_ANIM, 5, '<param name="SCALE" type="float"/>')
+				self.writel(S_ANIM, 4, '</accessor>')
+				self.writel(S_ANIM, 3, '</technique_common>')
+				self.writel(S_ANIM, 2, '</source>')
 		else:
 			# Value Source
 			self.writel(S_ANIM, 2, '<source id="' + anim_id + '-transform-output">')
@@ -1451,15 +1692,17 @@ class DaeExporter:
 		self.writel(S_ANIM, 3, '<input semantic="INTERPOLATION" source="#' + anim_id + '-interpolation-output"/>')
 		self.writel(S_ANIM, 2, '</sampler>')
 
-		self.writel(S_ANIM, 2, '<sampler id="' + anim_id + '-scale-sampler">')
-		self.writel(S_ANIM, 3, '<input semantic="INPUT" source="#' + anim_id + '-input"/>')
-		self.writel(S_ANIM, 3, '<input semantic="OUTPUT" source="#' + anim_id + '-scale-output"/>')
-		self.writel(S_ANIM, 3, '<input semantic="INTERPOLATION" source="#' + anim_id + '-interpolation-output"/>')
-		self.writel(S_ANIM, 2, '</sampler>')
+		if (self.transform_matrix_scale):
+			self.writel(S_ANIM, 2, '<sampler id="' + anim_id + '-scale-sampler">')
+			self.writel(S_ANIM, 3, '<input semantic="INPUT" source="#' + anim_id + '-input"/>')
+			self.writel(S_ANIM, 3, '<input semantic="OUTPUT" source="#' + anim_id + '-scale-output"/>')
+			self.writel(S_ANIM, 3, '<input semantic="INTERPOLATION" source="#' + anim_id + '-interpolation-output"/>')
+			self.writel(S_ANIM, 2, '</sampler>')
 		
 		if (matrices):
 			self.writel(S_ANIM, 2, '<channel source="#' + anim_id + '-matrix-sampler" target="' + target + '/transform"/>')
-			self.writel(S_ANIM, 2, '<channel source="#' + anim_id + '-scale-sampler" target="' + target + '/scale"/>')
+			if (self.transform_matrix_scale):
+				self.writel(S_ANIM, 2, '<channel source="#' + anim_id + '-scale-sampler" target="' + target + '/scale"/>')
 		else:
 			self.writel(S_ANIM, 2, '<channel source="#' + anim_id + '-sampler" target="' + target + '"/>')
 		self.writel(S_ANIM, 1, '</animation>')
@@ -1493,9 +1736,9 @@ class DaeExporter:
 
 				if (not node in self.valid_nodes):
 					continue
-				if (node.animation_data== None or node.animation_data.action==None):
+				if (node.animation_data == None or node.animation_data.action == None):
 					continue
-				if ((node.type == "ARMATURE") and (node.data.pose_position=='REST')):
+				if ((node.type == "ARMATURE") and (node.data.pose_position == 'REST')):
 					continue
 				if (allowed != None and not (node in allowed)):
 					if (node.type == "MESH" and node.data != None and (node in self.armature_for_morph) and (self.armature_for_morph[node] in allowed)):
@@ -1607,11 +1850,6 @@ class DaeExporter:
 						for j, bone in enumerate(s.pose.bones):
 							bone.matrix_basis = Matrix()
 
-
-				# print("allowed skeletons "+str(allowed_skeletons))
-
-				# print(str(x))
-
 				tcn = self.export_animation(int(x.frame_range[0]), int(x.frame_range[1] + 0.5), lookup, allowed_skeletons)
 				framelen = (1.0 / self.scene.render.fps)
 				start = x.frame_range[0] * framelen
@@ -1667,7 +1905,6 @@ class DaeExporter:
 			light_lookup = self.export_lights()
 			morph_lookup = self.export_morph_controllers(mesh_lookup, geometry_morphs)
 			skin_controller_lookup = self.export_skin_controllers(mesh_lookup, morph_lookup)
-
 			lookup = {
 				"material":material_lookup,
 				"mesh":mesh_lookup,
@@ -1678,7 +1915,15 @@ class DaeExporter:
 				"skin_controller":skin_controller_lookup,
 				"material_bind": material_bind_lookup}
 			
-			self.export_scene(lookup)
+			nodes_lookup = self.export_scene(lookup)
+			lookup["nodes"] = nodes_lookup
+			
+			if (self.config["use_physics"]):
+				physics_material_lookup = self.export_physics_materials()
+				lookup["physics_material"] = physics_material_lookup
+				physics_model_lookup = self.export_physics_models(lookup)
+				lookup["physics_model"] = physics_model_lookup
+				self.export_physics_scene(lookup)
 
 			if (self.config["use_anim"]):
 				self.export_animations(lookup)
@@ -1722,7 +1967,8 @@ class DaeExporter:
 					f.write(bytes(l + "\n", "UTF-8"))
 	
 			f.write(bytes('<scene>\n', "UTF-8"))
-			f.write(bytes('\t<instance_visual_scene url="#' + self.scene_name + '" />\n', "UTF-8"))
+			f.write(bytes('\t<instance_visual_scene url="#' + self.scene_name + '"/>\n', "UTF-8"))
+			f.write(bytes('\t<instance_physics_scene url="#' + self.scene_name+'-physics' + '"/>\n', "UTF-8"))
 			f.write(bytes('</scene>\n', "UTF-8"))
 			f.write(bytes('</COLLADA>\n', "UTF-8"))
 			
@@ -1745,7 +1991,7 @@ class DaeExporter:
 		self.material_link_symbols = {}
 		self.meshes_to_clear = []
 		self.node_names = {}
-
+		self.transform_matrix_scale = self.config["transform_type"] == 'MATRIX_SCALE'
 
 
 def save(operator, context,

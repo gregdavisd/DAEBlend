@@ -78,16 +78,23 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
             description="Export only selected objects (and visible in active layers if that applies).",
             default=False,
             )
+
+    transform_type = EnumProperty(
+        name="Transforms",
+        items=(('MATRIX', "Matrix only", "Transforms are in a single matrix"),
+               ('MATRIX_SCALE', "Matrix+Scale", "Matrix with normalized rotation and  separate scale transform")
+               ),
+        description="Types of node transformations to use "
+                    "(Use 'Matrix only' to simplify the transforms, use 'Matrix+Scale' if the scene is for use in a physics simulation)",
+        default='MATRIX',
+        )
+    
     use_mesh_modifiers = BoolProperty(
             name="Apply Modifiers",
             description="Apply modifiers to mesh objects (on a copy!).",
 	    default=False,
             )
-    #use_tangent_arrays = BoolProperty(
-	 #   name="Tangent Arrays",
-	  #  description="Export Tangent and Binormal arrays (for normalmapping).",
-	   # default=False,
-	    #)
+
     use_triangles = BoolProperty(
 	    name="Triangulate",
 	    description="Export Triangles instead of Polygons.",
@@ -109,6 +116,12 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
             description="Export keyframe animation",
             default=False,
             )
+    use_physics = BoolProperty(
+            name="Export Physics",
+            description="Export rigid body information",
+            default=True,
+            )
+    
     use_anim_action_all = BoolProperty(
             name="All Actions",
             description=("Export all actions for the first armature found in separate DAE files"),
