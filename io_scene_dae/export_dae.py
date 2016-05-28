@@ -344,7 +344,6 @@ class DaeExporter:
 		
 		# get vertices
 		vertices = [Vector(v.co) for v in mesh.vertices.values()]
-		
 
 		# get polygons
 		loop_vertices, materials = self.get_polygon_groups(mesh)
@@ -356,12 +355,17 @@ class DaeExporter:
 		
 		# convert dictionary of loop vertices to a flat list of normals, removing duplicates
 		normals = list(set([v[1].normal.freeze() for g in loop_vertices.values() for s in g for v in s]))
-		normals_map = {k:v for (v, k) in enumerate(normals)}
 		
-		# convert dictionary of loop vertices to a dictionary of normal indices
-		surface_normal_indices = {g:s for (g, s) in 
-							zip(loop_vertices.keys(),
-										[[[normals_map[v[1].normal.freeze()] for v in p] for p in g] for g in loop_vertices.values()])}
+		if (not ((len(normals)==1) and (normals[0].length<0.1))):
+			normals_map = {k:v for (v, k) in enumerate(normals)}
+			# convert dictionary of loop vertices to a dictionary of normal indices
+			surface_normal_indices = {g:s for (g, s) in 
+								zip(loop_vertices.keys(),
+											[[[normals_map[v[1].normal.freeze()] for v in p] for p in g] for g in loop_vertices.values()])}
+		else:
+			# if no normals on the mesh then the normals list will be just one zero vector
+			normals=[]
+			surface_normal_indices={}
 		
 		# get uv's
 		if (mesh.uv_layers != None) and (mesh.uv_layers.active != None):
@@ -426,31 +430,101 @@ class DaeExporter:
 			loop_vertices.append(polygon)
 		
 		return	vertices, materials
+
+	def node_has_convex_hull(self, node):
+		if (not self.config["use_physics"]):
+			return False
+		if (
+			node.rigid_body and 
+			node.rigid_body.collision_shape == 'CONVEX_HULL' and 
+			(node.rigid_body.mesh_source == 'BASE' or node.rigid_body.mesh_source == 'DEFORM')):
+			return True
+		return False
+	
+	def mesh_to_convex_hull(self, mesh):
+		# use blender to generate a convex hull for the mesh
 		
+		# just need the vertices for hull generation
+		
+		bm = bmesh.new()
+		for vert in mesh.vertices.values():
+			bm.verts.new(vert.co)
+		bm.verts.ensure_lookup_table()
+		
+		geom = {}
+		try:
+			#Generate hull
+			ret = bmesh.ops.convex_hull(bm, input=bm.verts, use_existing_faces=False)
+			
+			# Delete the vertices that weren't used in the convex hull
+			
+			geom = ret["geom_unused"]
+			# there is no documentation for values of 'context'. 1 works to delete vertices
+			bmesh.ops.delete(bm, geom=geom, context=1)
+		except:
+			return None
+
+		# convert bmesh back to mesh	
+		me = bpy.data.meshes.new(self.new_id("DAE_convex_hull"))
+		bm.to_mesh(me)
+		if (me != mesh):
+			self.meshes_to_clear.append(me)
+		return me
+			
 	def export_meshes(self):
 		meshes = 	set(
 			filter(lambda obj :	obj.type == "MESH" or obj.type == "CURVE", 	self.valid_nodes)
 		);
 			
+		triangulate = self.config["use_triangles"]
 		geometry_lookup = {}
+		convex_geometry_lookup = {}
 		geometry_morphs = {}
 		material_bind_lookup = {}
-		for mesh in meshes:
-			if (not mesh.data.name in geometry_lookup):
-				mesh_id = mesh.data.name + "-mesh"
-				geometry_lookup[mesh.data.name] = mesh_id
-				valid, material_bind = self.export_mesh(mesh, mesh_id)
-				if (valid):
-					if (len(material_bind)):
-						material_bind_lookup[mesh.data.name] = material_bind
-					morphs = self.export_mesh_morphs(mesh, mesh_id)
-					if (morphs):
-						geometry_morphs[mesh.data.name] = morphs
-				else:
-					if(mesh.type == "CURVE"):
-						self.export_curve(mesh.data, mesh_id)
-
-		return geometry_lookup, geometry_morphs, material_bind_lookup
+		for node in meshes:
+			if (node.data.name in geometry_lookup):
+				# already exported
+				continue
+			
+			# generate mesh from node
+			
+			mesh = self.node_to_mesh(node, triangulate)
+			if (not mesh):
+				continue
+			
+			# export the mesh
+			
+			mesh_id = node.data.name + "-mesh"
+			valid, material_bind = self.export_mesh(mesh, mesh_id, node.data.name, triangulate)
+			if (valid):
+				geometry_lookup[node.data.name] = mesh_id
+				if (len(material_bind)):
+					material_bind_lookup[node.data.name] = material_bind
+					
+				# export convex hull if needed by physics scene
+				
+				if (self.node_has_convex_hull(node)):
+					convex_mesh = self.mesh_to_convex_hull(mesh)
+					if (convex_mesh):
+						convex_mesh_id = mesh_id + "-convex"
+						valid, material_bind = self.export_mesh(convex_mesh, convex_mesh_id, node.data.name, triangulate, True)
+						if (valid):
+							convex_geometry_lookup[node.data.name] = convex_mesh_id
+							
+				# export morphs from shape keys
+				
+				morphs = self.export_mesh_morphs(node, mesh_id)
+				if (morphs):
+					geometry_morphs[node.data.name] = morphs
+					
+			else:
+				if(node.type == "CURVE"):
+					# All else failed so export a Bezier curve
+					self.export_curve(node.data, mesh_id)
+					
+			self.remove_export_meshes()
+			
+		return geometry_lookup, convex_geometry_lookup, geometry_morphs, material_bind_lookup
 	
 	def export_mesh_morphs(self, node, mesh_id):
 		mesh = node.data
@@ -620,12 +694,7 @@ class DaeExporter:
 		self.writel(S_SKIN, 2, '</skin>')
 		self.writel(S_SKIN, 1, '</controller>')
 
-	def export_mesh(self, node, mesh_id):
-
-		triangulate = self.config["use_triangles"]
-		mesh = self.node_to_mesh(node, triangulate)
-		if (not mesh):
-			return False, None
+	def export_mesh(self, mesh, mesh_id, mesh_name, triangulated, convex=False):
 
 		vertices, normals, uv, colors, surface_v_indices, surface_normal_indices, surface_uv_indices, materials = self.get_mesh_surfaces(node, mesh)
 		
@@ -634,9 +703,11 @@ class DaeExporter:
 		has_uv = len(uv) > 0	
 		has_colors = len(colors) > 0
 		
-		self.writel(S_GEOM, 1, '<geometry id="' + mesh_id + '" name="' + node.data.name + '">')
-		self.writel(S_GEOM, 2, '<mesh>')
-
+		self.writel(S_GEOM, 1, '<geometry id="' + mesh_id + '" name="' + mesh_name + '">')
+		if (convex):
+			self.writel(S_GEOM, 2, '<convex_mesh>')
+		else:
+			self.writel(S_GEOM, 2, '<mesh>')
 
 		# Vertex Array
 		self.writel(S_GEOM, 3, '<source id="' + mesh_id + '-positions">')
@@ -700,7 +771,7 @@ class DaeExporter:
 		self.writel(S_GEOM, 3, '</vertices>')
 
 		prim_type = ""
-		if (triangulate):
+		if (triangulated):
 			prim_type = "triangles"
 		else:
 			prim_type = "polylist"
@@ -725,7 +796,7 @@ class DaeExporter:
 		
 		for m in surface_v_indices:
 			
-			# Every face set must have a material symbol even if no material is assigned in Blender.
+			# Every renderable mesh must have a material symbol even if no material is assigned in Blender.
 			matref = self.get_material_link_symbol(materials[m])
 			if (materials[m] != None):
 				material_bind[materials[m]] = matref
@@ -741,7 +812,7 @@ class DaeExporter:
 				self.writel(S_GEOM, 4, '<input semantic="COLOR" source="#' + mesh_id + '-colors" offset="' + str(color_offset) + '"/>')
 			
 			# vcount list if not triangulating
-			if (not triangulate):
+			if (not triangulated):
 				int_values = "<vcount>"
 				int_values += " ".join([str(len(p)) for p in surface_v_indices[m]])
 				int_values += "</vcount>"
@@ -772,7 +843,11 @@ class DaeExporter:
 			self.writel(S_GEOM, 3, '</' + prim_type + '>')
 
 
-		self.writel(S_GEOM, 2, '</mesh>')
+		if (convex):
+			self.writel(S_GEOM, 2, '</convex_mesh>')
+		else:
+			self.writel(S_GEOM, 2, '</mesh>')
+			
 		self.writel(S_GEOM, 1, '</geometry>')
 
 		return True, material_bind
@@ -1240,8 +1315,6 @@ class DaeExporter:
 		get_children_of_bones(armature_node.children, parenting_map)
 		return parenting_map
 			
-
-			
 	def is_node_valid(self, node):
 		if node == None:
 			return False
@@ -1529,23 +1602,20 @@ class DaeExporter:
 		
 		# get the source for building a physics mesh based on the mesh_source setting
 		try:
-			if (node.rigid_body.mesh_source == 'BASE'):
-				return lookup['mesh'][node.data.name]
-			if (node.rigid_body.mesh_source == 'DEFORM'):
-				if (node.data.name in lookup['skin_controller']):
-					return lookup['skin_controller'][node.data.name]
-				if (node.data.name in lookup['morph']):
-					return lookup['morph'][node.data.name]
-				return lookup['mesh'][node.data.name]
-			if (node.rigid_body.mesh_source == 'FINAL'):
-				return lookup['nodes'][node.name]
+			if (self.node_has_convex_hull(node)):
+				return True, lookup['convex_mesh'][node.data.name]
+			else:
+				return False, lookup['nodes'][node.name]
 		except:
-			return None
+			return False, None
 		
 	def export_convex_hull_shape(self, node, il, lookup):
-		mesh_id = self.get_physics_mesh_id(node, lookup)
+		convex, mesh_id = self.get_physics_mesh_id(node, lookup)
 		if (mesh_id != None):
-			self.writel(S_P_MODEL, il, '<convex_mesh convex_hull_of="#{}"/>'.format(mesh_id))
+			if (convex):
+				self.writel(S_P_MODEL, il, '<instance_geometry url="#{}"/>'.format(mesh_id))
+			else:
+				self.writel(S_P_MODEL, il, '<convex_mesh convex_hull_of="#{}"/>'.format(mesh_id))
 		
 	def export_mesh_shape(self, node, il, lookup):
 		mesh_id = self.get_physics_mesh_id(node, lookup)
@@ -1665,7 +1735,9 @@ class DaeExporter:
 				self.writel(S_ANIM, 3, '<float_array id="' + anim_id + '-scale-output-array" count="' + str(frame_total * 3) + '">' + source_scale + '</float_array>')
 				self.writel(S_ANIM, 3, '<technique_common>')
 				self.writel(S_ANIM, 4, '<accessor source="#' + anim_id + '-scale-output-array" count="' + str(frame_total) + '" stride="3">')
-				self.writel(S_ANIM, 5, '<param name="SCALE" type="float"/>')
+				self.writel(S_ANIM, 5, '<param name="X" type="float"/>')
+				self.writel(S_ANIM, 5, '<param name="Y" type="float"/>')
+				self.writel(S_ANIM, 5, '<param name="Z" type="float"/>')
 				self.writel(S_ANIM, 4, '</accessor>')
 				self.writel(S_ANIM, 3, '</technique_common>')
 				self.writel(S_ANIM, 2, '</source>')
@@ -1740,7 +1812,7 @@ class DaeExporter:
 
 				if (not node in self.valid_nodes):
 					continue
-				if (node.animation_data == None or node.animation_data.action == None):
+				if ((node.animation_data == None or node.animation_data.action == None) and (not len(node.constraints))):
 					continue
 				if ((node.type == "ARMATURE") and (node.data.pose_position == 'REST')):
 					continue
@@ -1858,7 +1930,6 @@ class DaeExporter:
 				framelen = (1.0 / self.scene.render.fps)
 				start = x.frame_range[0] * framelen
 				end = x.frame_range[1] * framelen
-				# print("Export anim: "+x.name)
 				self.writel(S_ANIM_CLIPS, 1, '<animation_clip name="' + x.name + '" start="' + str(start) + '" end="' + str(end) + '">')
 				for z in tcn:
 					self.writel(S_ANIM_CLIPS, 2, '<instance_animation url="#' + z + '"/>')
@@ -1887,7 +1958,7 @@ class DaeExporter:
 		for me in self.meshes_to_clear:
 			me.free_normals_split()
 			bpy.data.meshes.remove(me)
-		
+		self.meshes_to_clear = []
 
 	def export(self):
 		try:
@@ -1904,7 +1975,7 @@ class DaeExporter:
 			self.action_constraints = []
 			self.export_asset()
 			material_lookup = self.export_materials()
-			mesh_lookup, geometry_morphs, material_bind_lookup = self.export_meshes()
+			mesh_lookup, convex_mesh_lookup, geometry_morphs, material_bind_lookup = self.export_meshes()
 			camera_lookup = self.export_cameras()
 			light_lookup = self.export_lights()
 			morph_lookup = self.export_morph_controllers(mesh_lookup, geometry_morphs)
@@ -1912,6 +1983,7 @@ class DaeExporter:
 			lookup = {
 				"material":material_lookup,
 				"mesh":mesh_lookup,
+				"convex_mesh":convex_mesh_lookup,
 				"geometry_morphs":geometry_morphs,
 				"camera":camera_lookup,
 				"light":light_lookup,
