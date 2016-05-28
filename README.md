@@ -17,4 +17,4 @@ Elements are given meaningful identifiers that can be related back to the origin
 
 Originally based on the 'Better Collada' exporter the code has been refactored and features added. The generated output has differences in nuance from the output of the original script. So this exporter isn't always drop-in compatible with 'Better Collada'.
 
-Send bugs/queries/feature requests to gregery20@yahoo.com.au or raise an issue on github.
+Send bugs/queries requests to gregery20@yahoo.com.au or raise an issue on github.
