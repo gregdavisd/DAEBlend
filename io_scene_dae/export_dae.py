@@ -872,23 +872,14 @@ class DaeExporter:
 		return node_id
 
 	def export_armature_bone(self, bone, il, si, lookup, nodes_lookup, parenting_map):
-		deforming = bone.use_deform or (bone.name in parenting_map)
+		deforming = bone.use_deform
 		
 		# don't export bones that don't deform if the option is set. Children nodes are still exported
 		do_export = deforming or not self.config['use_deform_bone_only']
 		
 		if (do_export):
 			boneid = self.get_node_id(bone.name)
-			boneidx = si["bone_count"]
-			si["bone_count"] += 1
 			bonesid = bone.name
-			if (bone.name in self.used_bones):
-				if (self.config["use_anim_action_all"]):
-					self.operator.report({'WARNING'}, 'Bone name "' + bone.name + '" used in more than one skeleton. Actions might export wrong.')
-			else:
-				self.used_bones.append(bone.name)
-	
-			si["bone_index"][bone.name] = boneidx
 			si["bone_ids"][bone] = boneid
 			self.writel(S_NODES, il, '<node id="' + boneid + '" sid="' + bonesid + '" name="' + bone.name + '" type="JOINT">')
 			il += 1
@@ -903,12 +894,12 @@ class DaeExporter:
 			else:
 				si["has_transform"][bone]=False
 	
-			# export nodes that are parented to this bone
-			
-			node_children = parenting_map.get(bone.name, None)
-			if (node_children != None):
-				for c in node_children:
-					self.export_node(c, il, lookup, nodes_lookup)
+		# export nodes that are parented to this bone
+		
+		node_children = parenting_map.get(bone.name, None)
+		if (node_children != None):
+			for c in node_children:
+				self.export_node(c, il, lookup, nodes_lookup)
 			
 		for c in bone.children:
 			self.export_armature_bone(c, il, si, lookup, nodes_lookup, parenting_map)
@@ -931,7 +922,7 @@ class DaeExporter:
 			self.skeletons.append(node)
 	
 			armature = node.data
-			self.skeleton_info[node] = { "bone_count":0, "name":node.name, "bone_index":{}, "bone_ids":{}, "has_transform":{}}
+			self.skeleton_info[node] = { "name":node.name,  "bone_ids":{}, "has_transform":{}}
 	
 			for b in armature.bones:
 				if (b.parent != None):
@@ -1203,8 +1194,17 @@ class DaeExporter:
 		
 	def get_node_local_transform(self, node):
 		if (node.parent_type == 'BONE'):
+			armature=node.parent
+			parent_bone=armature.data.bones[node.parent_bone]
+			if (parent_bone.use_deform):
+				parent=parent_bone
+			else:
+				parent=self.get_bone_deform_parent(parent_bone)
+			if (not parent):
+				parent=armature
+			
 			# node.matrix_local is not in armature space, so generate a true armature space matrix from relative world matrices
-			matrix = node.parent.data.bones[node.parent_bone].matrix_local.inverted() * (node.parent.matrix_world.inverted() * node.matrix_world)
+			matrix = parent.matrix_local.inverted() * (armature.matrix_world.inverted() * node.matrix_world)
 		else:
 			matrix = node.matrix_local
 		
@@ -1215,13 +1215,15 @@ class DaeExporter:
 			return {"matrix":matrix}
 		
 	def get_bone_deform_parent(self, bone):
-		# traverse up parenting to get a parent bone that has deform checked
+		# traverse up bone parenting to get a parent bone that has deform checked
 		parent = bone.parent
 		while ((parent != None) and not parent.use_deform):
 			parent = parent.parent
 		return parent
 	
 	def get_bone_transform(self, bone):
+		# get the transform relative to the parent bone.
+		
 		parent = self.get_bone_deform_parent(bone)
 		if (parent != None):
 			matrix = parent.matrix_local.inverted() * bone.matrix_local
@@ -1233,19 +1235,22 @@ class DaeExporter:
 		else:
 			return {"matrix":matrix}
 			
-	def get_posebone_transform(self, posebone):
+	def get_posebone_transform(self,posebones_map, posebone):
 		# get posebone transform relative to its parent bone, if no parent bone then relative to the armature
 		matrix = posebone.matrix.copy()
-		if (posebone.parent):
-			parent_invisible = False
-
-			for i in range(3):
-				if (posebone.parent.scale[i] == 0.0):
-					parent_invisible = True
-					break
-
-			if (not parent_invisible):
-				matrix = posebone.parent.matrix.inverted() * matrix
+		if (posebone.bone.parent is not None):
+			parent_bone=self.get_bone_deform_parent(posebone.bone)
+			if (parent_bone):
+				parent=posebones_map[parent_bone.name]
+				parent_invisible = False
+	
+				for i in range(3):
+					if (parent.scale[i] == 0.0):
+						parent_invisible = True
+						break
+	
+				if (not parent_invisible):
+					matrix = parent.matrix.inverted() * matrix
 				
 		if (self.transform_matrix_scale):
 			matrix = self.remove_matrix_scale(matrix, posebone.scale)
@@ -1272,7 +1277,7 @@ class DaeExporter:
 			return
 
 		node_id = self.get_node_id(node.name)
-		nodes_lookup[node.name] = node_id
+		nodes_lookup[node] = node_id
 		
 		self.writel(S_NODES, il, '<node id="' + node_id + '" name="' + node.name + '" type="NODE">')
 		il += 1
@@ -1291,7 +1296,7 @@ class DaeExporter:
 				skin_id = lookup["skin_controller"][node.data.name]
 				self.writel(S_NODES, il, '<instance_controller url="#' + skin_id + '">')
 				if (node.parent != None):
-					self.writel(S_NODES, il + 1, '<skeleton>#' + nodes_lookup[node.parent.name] + '</skeleton>')
+					self.writel(S_NODES, il + 1, '<skeleton>#' + nodes_lookup[node.parent] + '</skeleton>')
 				self.export_material_bind(node, il, lookup)
 				self.writel(S_NODES, il, "</instance_controller>")
 			elif (node.data.name in lookup["geometry_morphs"]):
@@ -1504,7 +1509,7 @@ class DaeExporter:
 	def export_physics_model(self, node, physics_model_id, lookup):
 		
 		self.writel(S_P_MODEL, 1, '<physics_model id="{}">'.format(physics_model_id))
-		self.writel(S_P_MODEL, 2, '<rigid_body sid="{}">'.format(lookup['nodes'][node.name]))
+		self.writel(S_P_MODEL, 2, '<rigid_body sid="{}">'.format(lookup['nodes'][node]))
 		self.writel(S_P_MODEL, 3, '<technique_common>')
 		self.writel(S_P_MODEL, 4, '<dynamic>{}</dynamic>'.format(str(node.rigid_body.enabled).lower()))
 		self.writel(S_P_MODEL, 4, '<mass>{}</mass>'.format(node.rigid_body.mass))
@@ -1624,7 +1629,7 @@ class DaeExporter:
 			if (self.node_has_convex_hull(node)):
 				return True, lookup['convex_mesh'][node.data.name]
 			else:
-				return False, lookup['nodes'][node.name]
+				return False, lookup['nodes'][node]
 		except:
 			return False, None
 		
@@ -1880,7 +1885,7 @@ class DaeExporter:
 							xform_cache[bone_name] = []
 
 						posebone = node.pose.bones[bone.name]
-						transform = self.get_posebone_transform(posebone)
+						transform = self.get_posebone_transform(node.pose.bones,posebone)
 						xform_cache[bone_name].append((key, transform))
 
 		self.scene.frame_set(frame_orig)
@@ -2084,7 +2089,6 @@ class DaeExporter:
 		self.skeleton_info = {}
 		self.config = kwargs
 		self.valid_nodes = []
-		self.used_bones = []
 		self.material_link_symbols = {}
 		self.meshes_to_clear = []
 		self.node_names = {}
