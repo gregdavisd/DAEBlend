@@ -356,7 +356,7 @@ class DaeExporter:
 		# convert dictionary of loop vertices to a flat list of normals, removing duplicates
 		normals = list(set([v[1].normal.freeze() for g in loop_vertices.values() for s in g for v in s]))
 		
-		if (not ((len(normals)==1) and (normals[0].length<0.1))):
+		if (not ((len(normals) == 1) and (normals[0].length < 0.1))):
 			normals_map = {k:v for (v, k) in enumerate(normals)}
 			# convert dictionary of loop vertices to a dictionary of normal indices
 			surface_normal_indices = {g:s for (g, s) in 
@@ -364,8 +364,8 @@ class DaeExporter:
 											[[[normals_map[v[1].normal.freeze()] for v in p] for p in g] for g in loop_vertices.values()])}
 		else:
 			# if no normals on the mesh then the normals list will be just one zero vector
-			normals=[]
-			surface_normal_indices={}
+			normals = []
+			surface_normal_indices = {}
 		
 		# get uv's
 		if (mesh.uv_layers != None) and (mesh.uv_layers.active != None):
@@ -451,9 +451,8 @@ class DaeExporter:
 			bm.verts.new(vert.co)
 		bm.verts.ensure_lookup_table()
 		
-		geom = {}
 		try:
-			#Generate hull
+			# Generate hull
 			ret = bmesh.ops.convex_hull(bm, input=bm.verts, use_existing_faces=False)
 			
 			# Delete the vertices that weren't used in the convex hull
@@ -873,37 +872,49 @@ class DaeExporter:
 		return node_id
 
 	def export_armature_bone(self, bone, il, si, lookup, nodes_lookup, parenting_map):
-		boneid = self.get_node_id(bone.name)
-		boneidx = si["bone_count"]
-		si["bone_count"] += 1
-		bonesid = bone.name
-		if (bone.name in self.used_bones):
-			if (self.config["use_anim_action_all"]):
-				self.operator.report({'WARNING'}, 'Bone name "' + bone.name + '" used in more than one skeleton. Actions might export wrong.')
-		else:
-			self.used_bones.append(bone.name)
-
-		si["bone_index"][bone.name] = boneidx
-		si["bone_ids"][bone] = boneid
-		self.writel(S_NODES, il, '<node id="' + boneid + '" sid="' + bonesid + '" name="' + bone.name + '" type="JOINT">')
-		il += 1
-
-		transforms = self.get_bone_transform_xml(bone)
-		for t in transforms:
-			self.writel(S_NODES, il, t)
-
-		# export nodes that are parented to this bone
+		deforming = bone.use_deform or (bone.name in parenting_map)
 		
-		node_children = parenting_map.get(bone.name, None)
-		if (node_children != None):
-			for c in node_children:
-				self.export_node(c, il, lookup, nodes_lookup)
+		# don't export bones that don't deform if the option is set. Children nodes are still exported
+		do_export = deforming or not self.config['use_deform_bone_only']
+		
+		if (do_export):
+			boneid = self.get_node_id(bone.name)
+			boneidx = si["bone_count"]
+			si["bone_count"] += 1
+			bonesid = bone.name
+			if (bone.name in self.used_bones):
+				if (self.config["use_anim_action_all"]):
+					self.operator.report({'WARNING'}, 'Bone name "' + bone.name + '" used in more than one skeleton. Actions might export wrong.')
+			else:
+				self.used_bones.append(bone.name)
+	
+			si["bone_index"][bone.name] = boneidx
+			si["bone_ids"][bone] = boneid
+			self.writel(S_NODES, il, '<node id="' + boneid + '" sid="' + bonesid + '" name="' + bone.name + '" type="JOINT">')
+			il += 1
+	
+			# don't put a transform if the bone doesn't deform
+			
+			if (deforming):
+				transforms = self.get_bone_transform_xml(bone)
+				for t in transforms:
+					self.writel(S_NODES, il, t)
+				si["has_transform"][bone]=True
+			else:
+				si["has_transform"][bone]=False
+	
+			# export nodes that are parented to this bone
+			
+			node_children = parenting_map.get(bone.name, None)
+			if (node_children != None):
+				for c in node_children:
+					self.export_node(c, il, lookup, nodes_lookup)
 			
 		for c in bone.children:
 			self.export_armature_bone(c, il, si, lookup, nodes_lookup, parenting_map)
 		il -= 1
-		self.writel(S_NODES, il, '</node>')
-
+		if (do_export):
+			self.writel(S_NODES, il, '</node>')
 
 	def export_armature_node(self, node, il, lookup, nodes_lookup):
 		
@@ -920,7 +931,7 @@ class DaeExporter:
 			self.skeletons.append(node)
 	
 			armature = node.data
-			self.skeleton_info[node] = { "bone_count":0, "name":node.name, "bone_index":{}, "bone_ids":{}}
+			self.skeleton_info[node] = { "bone_count":0, "name":node.name, "bone_index":{}, "bone_ids":{}, "has_transform":{}}
 	
 			for b in armature.bones:
 				if (b.parent != None):
@@ -1203,9 +1214,17 @@ class DaeExporter:
 		else:
 			return {"matrix":matrix}
 		
+	def get_bone_deform_parent(self, bone):
+		# traverse up parenting to get a parent bone that has deform checked
+		parent = bone.parent
+		while ((parent != None) and not parent.use_deform):
+			parent = parent.parent
+		return parent
+	
 	def get_bone_transform(self, bone):
-		if (bone.parent != None):
-			matrix = bone.parent.matrix_local.inverted() * bone.matrix_local
+		parent = self.get_bone_deform_parent(bone)
+		if (parent != None):
+			matrix = parent.matrix_local.inverted() * bone.matrix_local
 		else:
 			matrix = bone.matrix_local.copy()
 		# Bones are only scaled in pose mode
@@ -1853,7 +1872,9 @@ class DaeExporter:
 
 					for bone in node.data.bones:
 
-						bone_name = self.skeleton_info[node]["bone_ids"][bone]
+						bone_name = self.skeleton_info[node]["bone_ids"].get(bone, None)
+						if (bone_name is None or not self.skeleton_info[node]["has_transform"][bone]):
+							continue
 
 						if (not (bone_name in xform_cache)):
 							xform_cache[bone_name] = []

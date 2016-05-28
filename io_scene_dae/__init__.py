@@ -26,9 +26,9 @@ bl_info = {
     "location": "File > Import-Export",
     "description": ("Export DAE Scenes. "),
     "warning": "",
-    "wiki_url": ("https://github.com/GWxPLym4F6V/Blender-Collada"),
+    "wiki_url": ("https://github.com/gregeryb/Blender-Collada"),
     "tracker_url": "",
-    "support": 'UNOFFICIAL',
+    "support": 'COMMUNITY',
     "category": "Import-Export"}
 
 
@@ -127,11 +127,17 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
             description=("Export all actions for the first armature found in separate DAE files"),
             default=True,
             )
+    use_deform_bone_only = BoolProperty(
+        name="Deform Only",
+        description="Skip exporting of bones which have 'Deform' unchecked. "
+        "If the bone is the parent of any geometry then it will still be exported.",
+        default=True,
+        )
     use_anim_skip_noexp = BoolProperty(
-	    name="Skip (-noexp) Actions",
-	    description="Skip exporting of actions whose name end in (-noexp). Useful to skip control animations.",
-	    default=True,
-	    )
+        name="Skip (-noexp) Actions",
+        description="Skip exporting of actions whose name end in (-noexp). Useful to skip control animations.",
+        default=True,
+        )
 
     @property
     def check_extension(self):
