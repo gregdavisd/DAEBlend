@@ -154,7 +154,10 @@ class DaeExporter:
 				pass  # fails sometimes, not sure why
 
 		self.writel(S_IMGS, 1, '<image id="' + image_id + '" name="' + image.name + '">')
-		self.writel(S_IMGS, 2, '<init_from>' + imgpath + '</init_from>')
+		
+		# the file path should be surrounded by <ref> tags
+		
+		self.writel(S_IMGS, 2, '<init_from><ref>' + imgpath + '</ref></init_from>')
 		self.writel(S_IMGS, 1, '</image>')
 
 	def export_effect(self, material, effect_id, image_lookup):
@@ -189,19 +192,10 @@ class DaeExporter:
 				continue
 			done_images.add(imgid)
 			
-			# surface
-			surface_sid = imgid + "-surface"
-			self.writel(S_FX, 3, '<newparam sid="' + surface_sid + '">')
-			self.writel(S_FX, 4, '<surface type="2D">')
-			self.writel(S_FX, 5, '<init_from>' + imgid + '</init_from>')  # this is sooo weird
-			self.writel(S_FX, 5, '<format>A8R8G8B8</format>')
-			self.writel(S_FX, 4, '</surface>')
-			self.writel(S_FX, 3, '</newparam>')
-			# sampler, collada sure likes it difficult
 			sampler_sid = imgid + "-sampler"
 			self.writel(S_FX, 3, '<newparam sid="' + sampler_sid + '">')
 			self.writel(S_FX, 4, '<sampler2D>')
-			self.writel(S_FX, 5, '<source>' + surface_sid + '</source>')
+			self.writel(S_FX, 5, '<instance_image url="{}"/>'.format(imgid))
 			self.writel(S_FX, 4, '</sampler2D>')
 			self.writel(S_FX, 3, '</newparam>')
 			sampler_table[i] = sampler_sid
@@ -506,6 +500,7 @@ class DaeExporter:
 	
 	def export_mesh_morphs(self, node, mesh_id):
 		mesh = node.data
+		triangulate = self.config["use_triangles"]
 
 		if (mesh.shape_keys != None and len(mesh.shape_keys.key_blocks)):
 			values = []
@@ -526,7 +521,8 @@ class DaeExporter:
 				mesh.update()
 				morph_id = mesh_id + "_morph_Key_" + str(k)
 				morph_targets.append(morph_id)
-				self.export_mesh(node, morph_id)
+				export_mesh=self.node_to_mesh(node, triangulate)
+				self.export_mesh(export_mesh, morph_id,morph_id,triangulate,)
 				shape.value = values[k]
 			
 			node.show_only_shape_key = scene_show_only_shape_key
