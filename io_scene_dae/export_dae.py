@@ -216,7 +216,7 @@ class DaeExporter:
 
 		self.writel(S_FX, 5, '<emission>')
 		if (emission_tex != None):
-			self.writel(S_FX, 6, '<texture texture="' + emission_tex + '" texcoord="CHANNEL1"/>')
+			self.writel(S_FX, 6, '<texture texture="' + emission_tex + '/>')
 		else:
 			self.writel(S_FX, 6, '<color>' + numarr_alpha(material.diffuse_color, material.emit) + ' </color>')  # not totally right but good enough
 		self.writel(S_FX, 5, '</emission>')
@@ -681,11 +681,11 @@ class DaeExporter:
 		float_values = " ".join([str(c) for v in [[v.x, v.y, v.z] for v in vertices] for c in v])
 		self.writel(S_GEOM, 4, '<float_array id="' + mesh_id + '-positions-array" count="' + str(len(vertices) * 3) + '">' + float_values + '</float_array>')
 		self.writel(S_GEOM, 4, '<technique_common>')
-		self.writel(S_GEOM, 4, '<accessor source="#' + mesh_id + '-positions-array" count="' + str(len(vertices)) + '" stride="3">')
-		self.writel(S_GEOM, 5, '<param name="X" type="float"/>')
-		self.writel(S_GEOM, 5, '<param name="Y" type="float"/>')
-		self.writel(S_GEOM, 5, '<param name="Z" type="float"/>')
-		self.writel(S_GEOM, 4, '</accessor>')
+		self.writel(S_GEOM, 5, '<accessor source="#' + mesh_id + '-positions-array" count="' + str(len(vertices)) + '" stride="3">')
+		self.writel(S_GEOM, 6, '<param name="X" type="float"/>')
+		self.writel(S_GEOM, 6, '<param name="Y" type="float"/>')
+		self.writel(S_GEOM, 6, '<param name="Z" type="float"/>')
+		self.writel(S_GEOM, 5, '</accessor>')
 		self.writel(S_GEOM, 4, '</technique_common>')
 		self.writel(S_GEOM, 3, '</source>')
 
@@ -695,11 +695,11 @@ class DaeExporter:
 			float_values = " ".join([str(c) for v in [[v.x, v.y, v.z] for v in normals] for c in v])
 			self.writel(S_GEOM, 4, '<float_array id="' + mesh_id + '-normals-array" count="' + str(len(normals) * 3) + '">' + float_values + '</float_array>')
 			self.writel(S_GEOM, 4, '<technique_common>')
-			self.writel(S_GEOM, 4, '<accessor source="#' + mesh_id + '-normals-array" count="' + str(len(normals)) + '" stride="3">')
-			self.writel(S_GEOM, 5, '<param name="X" type="float"/>')
-			self.writel(S_GEOM, 5, '<param name="Y" type="float"/>')
-			self.writel(S_GEOM, 5, '<param name="Z" type="float"/>')
-			self.writel(S_GEOM, 4, '</accessor>')
+			self.writel(S_GEOM, 5, '<accessor source="#' + mesh_id + '-normals-array" count="' + str(len(normals)) + '" stride="3">')
+			self.writel(S_GEOM, 6, '<param name="X" type="float"/>')
+			self.writel(S_GEOM, 6, '<param name="Y" type="float"/>')
+			self.writel(S_GEOM, 6, '<param name="Z" type="float"/>')
+			self.writel(S_GEOM, 5, '</accessor>')
 			self.writel(S_GEOM, 4, '</technique_common>')
 			self.writel(S_GEOM, 3, '</source>')
 
@@ -709,10 +709,10 @@ class DaeExporter:
 			float_values = " ".join([str(c) for v in [[v.x, v.y] for v in uv] for c in v])
 			self.writel(S_GEOM, 4, '<float_array id="' + mesh_id + '-texcoord-array" count="' + str(len(uv) * 2) + '">' + float_values + '</float_array>')
 			self.writel(S_GEOM, 4, '<technique_common>')
-			self.writel(S_GEOM, 4, '<accessor source="#' + mesh_id + '-texcoord-array" count="' + str(len(uv)) + '" stride="2">')
-			self.writel(S_GEOM, 5, '<param name="S" type="float"/>')
-			self.writel(S_GEOM, 5, '<param name="T" type="float"/>')
-			self.writel(S_GEOM, 4, '</accessor>')
+			self.writel(S_GEOM, 5, '<accessor source="#' + mesh_id + '-texcoord-array" count="' + str(len(uv)) + '" stride="2">')
+			self.writel(S_GEOM, 6, '<param name="S" type="float"/>')
+			self.writel(S_GEOM, 6, '<param name="T" type="float"/>')
+			self.writel(S_GEOM, 5, '</accessor>')
 			self.writel(S_GEOM, 4, '</technique_common>')
 			self.writel(S_GEOM, 3, '</source>')
 
@@ -723,11 +723,11 @@ class DaeExporter:
 			float_values = " ".join([str(c) for v in [[v.x, v.y, v.z] for v in colors] for c in v])
 			self.writel(S_GEOM, 4, '<float_array id="' + mesh_id + '-colors-array" count="' + str(len(colors) * 3) + '">' + float_values + '</float_array>')
 			self.writel(S_GEOM, 4, '<technique_common>')
-			self.writel(S_GEOM, 4, '<accessor source="#' + mesh_id + '-colors-array" count="' + str(len(colors)) + '" stride="3">')
-			self.writel(S_GEOM, 5, '<param name="R" type="float"/>')
-			self.writel(S_GEOM, 5, '<param name="G" type="float"/>')
-			self.writel(S_GEOM, 5, '<param name="B" type="float"/>')
-			self.writel(S_GEOM, 4, '</accessor>')
+			self.writel(S_GEOM, 5, '<accessor source="#' + mesh_id + '-colors-array" count="' + str(len(colors)) + '" stride="3">')
+			self.writel(S_GEOM, 6, '<param name="R" type="float"/>')
+			self.writel(S_GEOM, 6, '<param name="G" type="float"/>')
+			self.writel(S_GEOM, 6, '<param name="B" type="float"/>')
+			self.writel(S_GEOM, 5, '</accessor>')
 			self.writel(S_GEOM, 4, '</technique_common>')
 			self.writel(S_GEOM, 3, '</source>')
 
@@ -909,7 +909,7 @@ class DaeExporter:
 			
 		camera_lookup = {}
 		for camera in cameras:
-			camera_id = camera.name;
+			camera_id = camera.name+'-camera';
 			camera_lookup[camera.name] = camera_id
 			self.export_camera(camera, camera_id)
 			
@@ -947,7 +947,7 @@ class DaeExporter:
 					
 		light_lookup = {}
 		for light in lights:
-			light_id = light.name;
+			light_id = light.name+'-light';
 			light_lookup[light.name] = light_id
 			self.export_lamp(light, light_id)
 			
@@ -1489,7 +1489,7 @@ class DaeExporter:
 			self.writel(S_P_MODEL, 6, '<int_array id="{}" count="{}">{}</int_array>'
 					.format(groups_array_id, len(collision_groups), " ".join(collision_groups)))
 			self.writel(S_P_MODEL, 6, '<technique_common>')
-			self.writel(S_P_MODEL, 7, '<accessor source="#{}" stride="1">'.format(groups_array_id))
+			self.writel(S_P_MODEL, 7, '<accessor source="#{}" count="{}" stride="1">'.format(groups_array_id),len(collision_groups))
 			self.writel(S_P_MODEL, 8, '<param name="GROUP" type="int"/>')
 			self.writel(S_P_MODEL, 7, '</accessor>')
 			self.writel(S_P_MODEL, 6, '</technique_common>')
@@ -1984,7 +1984,7 @@ class DaeExporter:
 				return False
 	
 			f.write(bytes('<?xml version="1.0" encoding="utf-8"?>\n', "UTF-8"))
-			f.write(bytes('<COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">\n', "UTF-8"))
+			f.write(bytes('<COLLADA xmlns="http://www.collada.org/2008/03/COLLADASchema" version="1.5.0">\n', "UTF-8"))
 	
 			s = []
 			for x in self.sections.keys():
