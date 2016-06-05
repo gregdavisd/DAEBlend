@@ -251,15 +251,15 @@ class DaeExporter:
 		self.writel(S_FX, 6, '<float>' + str(material.specular_ior) + '</float>')
 		self.writel(S_FX, 5, '</index_of_refraction>')
 		self.writel(S_FX, 4, '</' + shtype + '>')
-		self.writel(S_FX, 4, '<extra>')
-		self.writel(S_FX, 5, '<technique profile="FCOLLADA">')
-		if (normal_tex):
-			self.writel(S_FX, 6, '<bump bumptype="NORMALMAP">')
-			self.writel(S_FX, 7, '<texture texture="' + normal_tex + '" texcoord="CHANNEL1"/>')
-			self.writel(S_FX, 6, '</bump>')
-
-		self.writel(S_FX, 5, '</technique>')
-		self.writel(S_FX, 4, '</extra>')
+		if (normal_tex is not None):
+			self.writel(S_FX, 4, '<extra>')
+			self.writel(S_FX, 5, '<technique profile="FCOLLADA">')
+			if (normal_tex):
+				self.writel(S_FX, 6, '<bump bumptype="NORMALMAP">')
+				self.writel(S_FX, 7, '<texture texture="' + normal_tex + '" texcoord="CHANNEL1"/>')
+				self.writel(S_FX, 6, '</bump>')
+			self.writel(S_FX, 5, '</technique>')
+			self.writel(S_FX, 4, '</extra>')
 		self.writel(S_FX, 3, '</technique>')
 		self.writel(S_FX, 2, '</profile_COMMON>')
 		self.writel(S_FX, 1, '</effect>')
@@ -522,7 +522,7 @@ class DaeExporter:
 				morph_id = mesh_id + "_morph_Key_" + str(k)
 				morph_targets.append(morph_id)
 				export_mesh=self.node_to_mesh(node, triangulate)
-				self.export_mesh(export_mesh, morph_id,morph_id,triangulate,)
+				self.export_mesh(export_mesh, morph_id,morph_id,triangulate)
 				shape.value = values[k]
 			
 			node.show_only_shape_key = scene_show_only_shape_key
@@ -1417,10 +1417,6 @@ class DaeExporter:
 		self.writel(S_P_MATS, 3, '<static_friction>{}</static_friction>'.format(node.rigid_body.friction))
 		self.writel(S_P_MATS, 3, '<restitution>{}</restitution>'.format(node.rigid_body.restitution))
 		self.writel(S_P_MATS, 2, '</technique_common>')
-		self.writel(S_P_MATS, 2, '<extra>')
-		self.writel(S_P_MATS, 3, '<technique profile="blender">')
-		self.writel(S_P_MATS, 3, '</technique>')
-		self.writel(S_P_MATS, 2, '</extra>')
 		self.writel(S_P_MATS, 1, '</physics_material>')
 		
 	def export_physics_models(self, lookup):
@@ -1483,20 +1479,7 @@ class DaeExporter:
 			self.writel(S_P_MODEL, 5, '</deactivation>')
 			
 		if (len(collision_groups)):
-			groups_source_id = physics_model_id + "-groups_source"
-			self.writel(S_P_MODEL, 5, '<source id="{}">'.format(groups_source_id))
-			groups_array_id = groups_source_id + "-array"
-			self.writel(S_P_MODEL, 6, '<int_array id="{}" count="{}">{}</int_array>'
-					.format(groups_array_id, len(collision_groups), " ".join(collision_groups)))
-			self.writel(S_P_MODEL, 6, '<technique_common>')
-			self.writel(S_P_MODEL, 7, '<accessor source="#{}" count="{}" stride="1">'.format(groups_array_id),len(collision_groups))
-			self.writel(S_P_MODEL, 8, '<param name="GROUP" type="int"/>')
-			self.writel(S_P_MODEL, 7, '</accessor>')
-			self.writel(S_P_MODEL, 6, '</technique_common>')
-			self.writel(S_P_MODEL, 5, '</source>')
-			self.writel(S_P_MODEL, 5, '<collision_groups>')
-			self.writel(S_P_MODEL, 6, '<input semantic="COLLISION_GROUP" source="#{}"/>'.format(groups_source_id))
-			self.writel(S_P_MODEL, 5, '</collision_groups>')
+			self.writel(S_P_MODEL, 5, '<collision_groups>{}</collision_groups>'.format(" ".join(collision_groups)))
 
 		self.writel(S_P_MODEL, 4, '</technique>')
 		self.writel(S_P_MODEL, 3, '</extra>')
