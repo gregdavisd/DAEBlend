@@ -1344,7 +1344,7 @@ class DaeExporter:
 			
 		image_lookup = {}
 		for image in images:
-			image_id = image.name + "image"
+			image_id = image.name + "-image"
 			image_lookup[image.name] = image_id
 			self.export_image(image, image_id)
 				
