@@ -20,7 +20,7 @@ from platform import node
 from mesh_inset.offset import Offset
 import os
 import time
-import math  # math.pi
+import math # math.pi
 import shutil
 import bpy
 import bmesh
@@ -148,10 +148,10 @@ class DaeExporter:
 		else:
 			# export relative, always, no one wants absolute paths.
 			try:
-				imgpath = os.path.relpath(imgpath, os.path.dirname(self.path)).replace("\\", "/")  # export unix compatible always
+				imgpath = os.path.relpath(imgpath, os.path.dirname(self.path)).replace("\\", "/") # export unix compatible always
 
 			except:
-				pass  # fails sometimes, not sure why
+				pass # fails sometimes, not sure why
 
 		self.writel(S_IMGS, 1, '<image id="' + image_id + '" name="' + image.name + '">')
 		
@@ -218,7 +218,7 @@ class DaeExporter:
 		if (emission_tex != None):
 			self.writel(S_FX, 6, '<texture texture="' + emission_tex + '/>')
 		else:
-			self.writel(S_FX, 6, '<color>' + numarr_alpha(material.diffuse_color, material.emit) + ' </color>')  # not totally right but good enough
+			self.writel(S_FX, 6, '<color>' + numarr_alpha(material.diffuse_color, material.emit) + ' </color>') # not totally right but good enough
 		self.writel(S_FX, 5, '</emission>')
 		self.writel(S_FX, 5, '<ambient>')
 		self.writel(S_FX, 6, '<color>' + numarr_alpha(self.scene.world.ambient_color, material.ambient) + ' </color>')
@@ -269,13 +269,13 @@ class DaeExporter:
 	
 			# get a mesh for this node
 		try:
-			mesh = node.to_mesh(self.scene, apply_modifiers, "RENDER")  # is this allright?
+			mesh = node.to_mesh(self.scene, apply_modifiers, "RENDER") # is this allright?
 		except:
 			return None
 				
-		if not len(mesh.polygons):
+		if not mesh or not len(mesh.polygons):
 			# mesh has no polygons so abort
-			if mesh != node.data: 
+			if mesh and (mesh != node.data): 
 				bpy.data.meshes.remove(mesh)
 			return False
 
@@ -283,10 +283,10 @@ class DaeExporter:
 		
 		# force triangulation of the mesh has polygons with more than 3 sides
 		force_triangluation = False
-		# for polygon in mesh.polygons:
-		# 	if (polygon.loop_total>4):
-		# 		force_triangluation=True
-		# 		break
+		for polygon in mesh.polygons:
+			if (polygon.loop_total > 4):
+				force_triangluation = True
+				break
 		
 		if (triangulate or force_triangluation):
 			bm = bmesh.new()
@@ -361,8 +361,8 @@ class DaeExporter:
 
 		# colors are aligned with vertices
 		colors = []
-		if (mesh.vertex_colors != None):
-			colors = [color.co for color in mesh.vertex_colors.values()]
+		if (mesh.vertex_colors):
+			colors = [c.color for c in mesh.vertex_colors.active.data.values()]
 			
 		return vertices, normals, uv, colors, surface_v_indices, surface_normal_indices, surface_uv_indices, materials
 	
@@ -389,7 +389,7 @@ class DaeExporter:
 				if (mat != None):
 					materials[f.material_index] = mat.name
 				else:
-					materials[f.material_index] = None  # weird, has no material?
+					materials[f.material_index] = None # weird, has no material?
 
 			loop_vertices = vertices[f.material_index]
 
@@ -461,14 +461,11 @@ class DaeExporter:
 			# generate mesh from node
 			
 			mesh = self.node_to_mesh(node, triangulate)
-			if (not mesh):
-				continue
 			
 			# export the mesh
-			
-			mesh_id = node.data.name + "-mesh"
-			valid, material_bind = self.export_mesh(mesh, mesh_id, node.data.name, triangulate)
-			if (valid):
+			if (mesh):
+				mesh_id = node.data.name + "-mesh"
+				material_bind = self.export_mesh(mesh, mesh_id, node.data.name, triangulate)
 				geometry_lookup[node.data.name] = mesh_id
 				if (len(material_bind)):
 					material_bind_lookup[node.data.name] = material_bind
@@ -492,9 +489,11 @@ class DaeExporter:
 			else:
 				if(node.type == "CURVE"):
 					# All else failed so export a Bezier curve
-					self.export_curve(node.data, mesh_id)
+					curve_id = node.data.name + "-curve"
+					self.export_curve(node.data, curve_id)
+					geometry_lookup[node.data.name] = curve_id
 					
-			self.remove_export_meshes()
+		self.remove_export_meshes()
 			
 		return geometry_lookup, convex_geometry_lookup, geometry_morphs, material_bind_lookup
 	
@@ -507,7 +506,7 @@ class DaeExporter:
 			morph_targets = []
 			for k in range(0, len(mesh.shape_keys.key_blocks)):
 				shape = node.data.shape_keys.key_blocks[k]
-				values += [shape.value]  # save value
+				values += [shape.value] # save value
 				shape.value = 0
 			
 			scene_show_only_shape_key = node.show_only_shape_key
@@ -521,8 +520,8 @@ class DaeExporter:
 				mesh.update()
 				morph_id = mesh_id + "_morph_Key_" + str(k)
 				morph_targets.append(morph_id)
-				export_mesh=self.node_to_mesh(node, triangulate)
-				self.export_mesh(export_mesh, morph_id,morph_id,triangulate)
+				export_mesh = self.node_to_mesh(node, triangulate)
+				self.export_mesh(export_mesh, morph_id, morph_id, triangulate)
 				shape.value = values[k]
 			
 			node.show_only_shape_key = scene_show_only_shape_key
@@ -720,7 +719,7 @@ class DaeExporter:
 
 		if (has_colors):
 			self.writel(S_GEOM, 3, '<source id="' + mesh_id + '-colors">')
-			float_values = " ".join([str(c) for v in [[v.x, v.y, v.z] for v in colors] for c in v])
+			float_values = " ".join([str(c) for v in [[v.r, v.g, v.b] for v in colors] for c in v])
 			self.writel(S_GEOM, 4, '<float_array id="' + mesh_id + '-colors-array" count="' + str(len(colors) * 3) + '">' + float_values + '</float_array>')
 			self.writel(S_GEOM, 4, '<technique_common>')
 			self.writel(S_GEOM, 5, '<accessor source="#' + mesh_id + '-colors-array" count="' + str(len(colors)) + '" stride="3">')
@@ -767,7 +766,7 @@ class DaeExporter:
 			if (materials[m] != None):
 				material_bind[materials[m]] = matref
 
-			self.writel(S_GEOM, 3, '<' + prim_type + ' count="' + str(len(surface_v_indices[m])) + '" material="' + matref + '">')  # todo material
+			self.writel(S_GEOM, 3, '<' + prim_type + ' count="' + str(len(surface_v_indices[m])) + '" material="' + matref + '">') # todo material
 			if (has_vertex):
 				self.writel(S_GEOM, 4, '<input semantic="VERTEX" source="#' + mesh_id + '-vertices" offset="' + str(vertex_offset) + '"/>')
 			if (has_normals):
@@ -810,7 +809,7 @@ class DaeExporter:
 			self.writel(S_GEOM, 2, '</mesh>')
 		self.writel(S_GEOM, 1, '</geometry>')
 
-		return True, material_bind
+		return material_bind
 
 	def get_material_link_symbol(self, material):
 		if (material != None):
@@ -851,9 +850,9 @@ class DaeExporter:
 				transforms = self.get_bone_transform_xml(bone)
 				for t in transforms:
 					self.writel(S_NODES, il, t)
-				si["has_transform"][bone]=True
+				si["has_transform"][bone] = True
 			else:
-				si["has_transform"][bone]=False
+				si["has_transform"][bone] = False
 	
 		# export nodes that are parented to this bone
 		
@@ -882,7 +881,7 @@ class DaeExporter:
 			self.skeletons.append(node)
 	
 			armature = node.data
-			self.skeleton_info[node] = { "name":node.name,  "bone_ids":{}, "has_transform":{}}
+			self.skeleton_info[node] = { "name":node.name, "bone_ids":{}, "has_transform":{}}
 	
 			for b in armature.bones:
 				if (b.parent != None):
@@ -909,7 +908,7 @@ class DaeExporter:
 			
 		camera_lookup = {}
 		for camera in cameras:
-			camera_id = camera.name+'-camera';
+			camera_id = camera.name + '-camera';
 			camera_lookup[camera.name] = camera_id
 			self.export_camera(camera, camera_id)
 			
@@ -922,14 +921,14 @@ class DaeExporter:
 		self.writel(S_CAMS, 3, '<technique_common>')
 		if (camera.type == "PERSP"):
 			self.writel(S_CAMS, 4, '<perspective>')
-			self.writel(S_CAMS, 5, '<yfov> ' + str(math.degrees(camera.angle)) + ' </yfov>')  # I think?
+			self.writel(S_CAMS, 5, '<yfov> ' + str(math.degrees(camera.angle)) + ' </yfov>') # I think?
 			self.writel(S_CAMS, 5, '<aspect_ratio> ' + str(self.scene.render.resolution_x / self.scene.render.resolution_y) + ' </aspect_ratio>')
 			self.writel(S_CAMS, 5, '<znear> ' + str(camera.clip_start) + ' </znear>')
 			self.writel(S_CAMS, 5, '<zfar> ' + str(camera.clip_end) + ' </zfar>')
 			self.writel(S_CAMS, 4, '</perspective>')
 		else:
 			self.writel(S_CAMS, 4, '<orthographic>')
-			self.writel(S_CAMS, 5, '<xmag> ' + str(camera.ortho_scale * 0.5) + ' </xmag>')  # I think?
+			self.writel(S_CAMS, 5, '<xmag> ' + str(camera.ortho_scale * 0.5) + ' </xmag>') # I think?
 			self.writel(S_CAMS, 5, '<aspect_ratio> ' + str(self.scene.render.resolution_x / self.scene.render.resolution_y) + ' </aspect_ratio>')
 			self.writel(S_CAMS, 5, '<znear> ' + str(camera.clip_start) + ' </znear>')
 			self.writel(S_CAMS, 5, '<zfar> ' + str(camera.clip_end) + ' </zfar>')
@@ -947,7 +946,7 @@ class DaeExporter:
 					
 		light_lookup = {}
 		for light in lights:
-			light_id = light.name+'-light';
+			light_id = light.name + '-light';
 			light_lookup[light.name] = light_id
 			self.export_lamp(light, light_id)
 			
@@ -962,7 +961,7 @@ class DaeExporter:
 		if (light.type == "POINT"):
 			self.writel(S_LAMPS, 4, '<point>')
 			self.writel(S_LAMPS, 5, '<color>' + strarr(light.color) + '</color>')
-			att_by_distance = 2.0 / light.distance  # convert to linear attenuation
+			att_by_distance = 2.0 / light.distance # convert to linear attenuation
 			self.writel(S_LAMPS, 5, '<linear_attenuation>' + str(att_by_distance) + '</linear_attenuation>')
 			if (light.use_sphere):
 				self.writel(S_LAMPS, 5, '<zfar>' + str(light.distance) + '</zfar>')
@@ -970,11 +969,11 @@ class DaeExporter:
 		elif (light.type == "SPOT"):
 			self.writel(S_LAMPS, 4, '<spot>')
 			self.writel(S_LAMPS, 5, '<color>' + strarr(light.color) + '</color>')
-			att_by_distance = 2.0 / light.distance  # convert to linear attenuation
+			att_by_distance = 2.0 / light.distance # convert to linear attenuation
 			self.writel(S_LAMPS, 5, '<linear_attenuation>' + str(att_by_distance) + '</linear_attenuation>')
 			self.writel(S_LAMPS, 5, '<falloff_angle>' + str(math.degrees(light.spot_size / 2)) + '</falloff_angle>')
 			self.writel(S_LAMPS, 4, '</spot>')
-		else:  # write a sun lamp for everything else (not supported)
+		else: # write a sun lamp for everything else (not supported)
 			self.writel(S_LAMPS, 4, '<directional>')
 			self.writel(S_LAMPS, 5, '<color>' + strarr(light.color) + '</color>')
 			self.writel(S_LAMPS, 4, '</directional>')
@@ -1025,9 +1024,7 @@ class DaeExporter:
 					interps.append("LINEAR")
 
 		self.writel(S_GEOM, 3, '<source id="' + spline_id + '-positions">')
-		position_values = ""
-		for x in points:
-			position_values += " " + str(x)
+		position_values = " ".join([str(x) for x in points])
 		self.writel(S_GEOM, 4, '<float_array id="' + spline_id + '-positions-array" count="' + str(len(points)) + '">' + position_values + '</float_array>')
 		self.writel(S_GEOM, 4, '<technique_common>')
 		self.writel(S_GEOM, 4, '<accessor source="#' + spline_id + '-positions-array" count="' + str(len(points) / 3) + '" stride="3">')
@@ -1038,9 +1035,7 @@ class DaeExporter:
 		self.writel(S_GEOM, 4, '</technique_common>')
 		self.writel(S_GEOM, 3, '</source>')
 		self.writel(S_GEOM, 3, '<source id="' + spline_id + '-intangents">')
-		intangent_values = ""
-		for x in handles_in:
-			intangent_values += " " + str(x)
+		intangent_values = " ".join([str(x) for x in handles_in])
 		self.writel(S_GEOM, 4, '<float_array id="' + spline_id + '-intangents-array" count="' + str(len(points)) + '">' + intangent_values + '</float_array>')
 		self.writel(S_GEOM, 4, '<technique_common>')
 		self.writel(S_GEOM, 4, '<accessor source="#' + spline_id + '-intangents-array" count="' + str(len(points) / 3) + '" stride="3">')
@@ -1051,9 +1046,7 @@ class DaeExporter:
 		self.writel(S_GEOM, 4, '</technique_common>')
 		self.writel(S_GEOM, 3, '</source>')
 		self.writel(S_GEOM, 3, '<source id="' + spline_id + '-outtangents">')
-		outtangent_values = ""
-		for x in handles_out:
-			outtangent_values += " " + str(x)
+		outtangent_values = " ".join([str(x) for x in handles_out])
 		self.writel(S_GEOM, 4, '<float_array id="' + spline_id + '-outtangents-array" count="' + str(len(points)) + '">' + outtangent_values + '</float_array>')
 		self.writel(S_GEOM, 4, '<technique_common>')
 		self.writel(S_GEOM, 4, '<accessor source="#' + spline_id + '-outtangents-array" count="' + str(len(points) / 3) + '" stride="3">')
@@ -1064,9 +1057,7 @@ class DaeExporter:
 		self.writel(S_GEOM, 4, '</technique_common>')
 		self.writel(S_GEOM, 3, '</source>')
 		self.writel(S_GEOM, 3, '<source id="' + spline_id + '-interpolations">')
-		interpolation_values = ""
-		for x in interps:
-			interpolation_values += " " + x
+		interpolation_values = " ".join([str(x) for x in interps]) 
 		self.writel(S_GEOM, 4, '<Name_array id="' + spline_id + '-interpolations-array" count="' + str(len(interps)) + '">' + interpolation_values + '</Name_array>')
 		self.writel(S_GEOM, 4, '<technique_common>')
 		self.writel(S_GEOM, 4, '<accessor source="#' + spline_id + '-interpolations-array" count="' + str(len(interps)) + '" stride="1">')
@@ -1075,9 +1066,7 @@ class DaeExporter:
 		self.writel(S_GEOM, 4, '</technique_common>')
 		self.writel(S_GEOM, 3, '</source>')
 		self.writel(S_GEOM, 3, '<source id="' + spline_id + '-tilts">')
-		tilt_values = ""
-		for x in tilts:
-			tilt_values += " " + str(x)
+		tilt_values = " ".join([str(x) for x in tilts]) 
 		self.writel(S_GEOM, 4, '<float_array id="' + spline_id + '-tilts-array" count="' + str(len(tilts)) + '">' + tilt_values + '</float_array>')
 		self.writel(S_GEOM, 4, '<technique_common>')
 		self.writel(S_GEOM, 4, '<accessor source="#' + spline_id + '-tilts-array" count="' + str(len(tilts)) + '" stride="1">')
@@ -1132,14 +1121,14 @@ class DaeExporter:
 		
 	def get_node_local_transform(self, node):
 		if (node.parent_type == 'BONE'):
-			armature=node.parent
-			parent_bone=armature.data.bones[node.parent_bone]
+			armature = node.parent
+			parent_bone = armature.data.bones[node.parent_bone]
 			if (parent_bone.use_deform):
-				parent=parent_bone
+				parent = parent_bone
 			else:
-				parent=self.get_bone_deform_parent(parent_bone)
+				parent = self.get_bone_deform_parent(parent_bone)
 			if (not parent):
-				parent=armature
+				parent = armature
 			
 			# node.matrix_local is not in armature space, so generate a true armature space matrix from relative world matrices
 			matrix = parent.matrix_local.inverted() * (armature.matrix_world.inverted() * node.matrix_world)
@@ -1173,13 +1162,13 @@ class DaeExporter:
 		else:
 			return {"matrix":matrix}
 			
-	def get_posebone_transform(self,posebones_map, posebone):
+	def get_posebone_transform(self, posebones_map, posebone):
 		# get posebone transform relative to its parent bone, if no parent bone then relative to the armature
 		matrix = posebone.matrix.copy()
 		if (posebone.bone.parent is not None):
-			parent_bone=self.get_bone_deform_parent(posebone.bone)
+			parent_bone = self.get_bone_deform_parent(posebone.bone)
 			if (parent_bone):
-				parent=posebones_map[parent_bone.name]
+				parent = posebones_map[parent_bone.name]
 				parent_invisible = False
 	
 				for i in range(3):
@@ -1355,7 +1344,7 @@ class DaeExporter:
 			
 		image_lookup = {}
 		for image in images:
-			image_id = image.name
+			image_id = image.name + "image"
 			image_lookup[image.name] = image_id
 			self.export_image(image, image_id)
 				
@@ -1372,7 +1361,7 @@ class DaeExporter:
 		
 		material_lookup = {}
 		for mat in materials:
-			material_id = mat.name
+			material_id = mat.name + "-material"
 			material_lookup[mat.name] = material_id
 			self.export_material(mat, material_id, effect_lookup[mat.name])
 			
@@ -1445,10 +1434,10 @@ class DaeExporter:
 		self.writel(S_P_MODEL, 5, '<rotate>0 0 1 0</rotate>')
 		self.writel(S_P_MODEL, 4, '</mass_frame>')
 		self.writel(S_P_MODEL, 4, '<shape>')
-		try:  # in case no physics material in the lookup
+		try: # in case no physics material in the lookup
 			self.writel(S_P_MODEL, 5, '<instance_physics_material url="#{}"/>'.format(lookup['physics_material'][node.data.name]))
 		except:
-			pass  # don't need it then
+			pass # don't need it then
 		shape_funcs = {
 					'BOX': self.export_box_shape,
 					'SPHERE': self.export_sphere_shape,
@@ -1753,7 +1742,7 @@ class DaeExporter:
 					continue
 				if (allowed != None and not (node in allowed)):
 					if (node.type == "MESH" and node.data != None and (node in self.armature_for_morph) and (self.armature_for_morph[node] in allowed)):
-						pass  # all good you pass with flying colors for morphs inside of action
+						pass # all good you pass with flying colors for morphs inside of action
 					else:
 						continue 
 				if ((node.data != None) and (node.data.name in lookup["morph"])):
@@ -1772,7 +1761,7 @@ class DaeExporter:
 
 				if (node.type == "MESH" and node.parent and node.parent.type == "ARMATURE"):
 
-					continue  # In Collada, nodes that have skin modifier must not export animation, animate the skin instead.
+					continue # In Collada, nodes that have skin modifier must not export animation, animate the skin instead.
 
 				if (len(node.constraints) > 0 or node.animation_data != None):
 					# If the node has constraints, or animation data, then export a sampled animation track
@@ -1796,7 +1785,7 @@ class DaeExporter:
 							xform_cache[bone_name] = []
 
 						posebone = node.pose.bones[bone.name]
-						transform = self.get_posebone_transform(node.pose.bones,posebone)
+						transform = self.get_posebone_transform(node.pose.bones, posebone)
 						xform_cache[bone_name].append((key, transform))
 
 		self.scene.frame_set(frame_orig)
@@ -1979,7 +1968,8 @@ class DaeExporter:
 	
 			f.write(bytes('<scene>\n', "UTF-8"))
 			f.write(bytes('\t<instance_visual_scene url="#' + self.scene_name + '"/>\n', "UTF-8"))
-			f.write(bytes('\t<instance_physics_scene url="#' + self.scene_name + '-physics' + '"/>\n', "UTF-8"))
+			if (self.config["use_physics"] & (bpy.context.scene.rigidbody_world != None)):
+				f.write(bytes('\t<instance_physics_scene url="#' + self.scene_name + '-physics' + '"/>\n', "UTF-8"))
 			f.write(bytes('</scene>\n', "UTF-8"))
 			f.write(bytes('</COLLADA>\n', "UTF-8"))
 			
@@ -2011,6 +2001,6 @@ def save(operator, context,
 
 	exp = DaeExporter(filepath, kwargs, operator)
 	exp.export()
-	return {'FINISHED'}  # so the script wont run after we have batch exported.
+	return {'FINISHED'} # so the script wont run after we have batch exported.
 
 
