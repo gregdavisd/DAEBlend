@@ -279,7 +279,7 @@ class DaeExporter:
 				bpy.data.meshes.remove(mesh)
 			return False
 
-		self.calculate_tangents(mesh)
+		mesh.calc_normals_split();
 		
 		# force triangulation of the mesh has polygons with more than 3 sides
 		force_triangluation = False
@@ -294,6 +294,7 @@ class DaeExporter:
 			bmesh.ops.triangulate(bm, faces=bm.faces)
 			bm.to_mesh(mesh)
 			bm.free()
+			mesh.calc_normals_split();
 			mesh.update(calc_tessface=True)
 		
 		if (mesh != node.data):
@@ -1133,11 +1134,11 @@ class DaeExporter:
 			# node.matrix_local is not in armature space, so generate a true armature space matrix from relative world matrices
 			matrix = parent.matrix_local.inverted() * (armature.matrix_world.inverted() * node.matrix_world)
 		else:
-			matrix = node.matrix_local
+			matrix = node.matrix_local.copy()
 		
 		if (self.transform_matrix_scale):
 			matrix = self.remove_matrix_scale(matrix, node.scale)
-			return {"matrix":matrix, "scale":node.scale}
+			return {"matrix":matrix, "scale":node.scale.copy()}
 		else:
 			return {"matrix":matrix}
 		
@@ -1181,7 +1182,6 @@ class DaeExporter:
 				
 		if (self.transform_matrix_scale):
 			matrix = self.remove_matrix_scale(matrix, posebone.scale)
-			return {"matrix":matrix, "scale":posebone.scale}
 		else:
 			return {"matrix":matrix}
 		
