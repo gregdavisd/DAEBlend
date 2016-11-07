@@ -1182,6 +1182,7 @@ class DaeExporter:
 				
 		if (self.transform_matrix_scale):
 			matrix = self.remove_matrix_scale(matrix, posebone.scale)
+			return {"matrix":matrix, "scale":posebone.scale.copy()}
 		else:
 			return {"matrix":matrix}
 		
