@@ -281,7 +281,7 @@ class DaeExporter:
 
 		mesh.calc_normals_split();
 		
-		# force triangulation of the mesh has polygons with more than 3 sides
+		# force triangulation of the mesh has polygons with more than 4 sides
 		force_triangluation = False
 		for polygon in mesh.polygons:
 			if (polygon.loop_total > 4):
