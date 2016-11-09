@@ -27,6 +27,7 @@ import bmesh
 from mathutils import Vector, Matrix, Euler
 import itertools
 from statistics import mean
+import sys
 
 #
 # Author: Gregery Barton
@@ -66,18 +67,30 @@ S_SKIN = 6
 S_CONT = 7
 S_CAMS = 8
 S_LAMPS = 9
-S_ANIM_CLIPS = 10
-S_NODES = 11
-S_P_MATS = 12
-S_P_MODEL = 13
-S_P_SCENE = 14
-S_ANIM = 15
+S_NODES = 10
+S_P_MATS = 11
+S_P_MODEL = 12
+S_P_SCENE = 13
+S_ANIM = 14
+S_ANIM_CLIPS = 15
 
 CMP_EPSILON = 0.0001
 
 def strmtx(mtx):
 	return " ".join([str(e) for v in mtx for e in v])
 
+def matrix_equal(a,b):
+	for aa,bb in zip([e for v in a for e in v],[e for v in b for e in v]):
+		if (abs(aa-bb)>CMP_EPSILON):
+			return False
+	return True
+
+def vector_equal(a,b):
+	for aa,bb in zip([e for e in a],[e for e in b]):
+		if (abs(aa-bb)>CMP_EPSILON):
+			return False
+	return True
+			
 def numarr_alpha(a, mult=1.0):
 	" ".join([str(x * mult) for x in a])
 	s = " "
@@ -505,7 +518,7 @@ class DaeExporter:
 		if (mesh.shape_keys != None and len(mesh.shape_keys.key_blocks)):
 			values = []
 			morph_targets = []
-			for k in range(0, len(mesh.shape_keys.key_blocks)):
+			for k in range(1, len(mesh.shape_keys.key_blocks)):
 				shape = node.data.shape_keys.key_blocks[k]
 				values += [shape.value] # save value
 				shape.value = 0
@@ -513,30 +526,30 @@ class DaeExporter:
 			scene_show_only_shape_key = node.show_only_shape_key
 			scene_active_shape_key = node.active_shape_key_index 
 			
-			for k in range(0, len(mesh.shape_keys.key_blocks)):
+			for k in range(1, len(mesh.shape_keys.key_blocks)):
 				shape = node.data.shape_keys.key_blocks[k]
 				node.show_only_shape_key = True
 				node.active_shape_key_index = k
 				shape.value = 1.0
 				mesh.update()
-				morph_id = mesh_id + "_morph_Key_" + str(k)
-				morph_targets.append(morph_id)
+				morph_id = mesh_id + "-morph-"+shape.name
+				morph_targets.append([morph_id,values[k-1]])
 				export_mesh = self.node_to_mesh(node, triangulate)
 				self.export_mesh(export_mesh, morph_id, morph_id, triangulate)
-				shape.value = values[k]
+				shape.value = values[k-1]
 			
 			node.show_only_shape_key = scene_show_only_shape_key
 			node.active_shape_key_index = scene_active_shape_key
 			mesh.update
 			return morph_targets
 		else:	
-				return None;
+			return None;
 	
 	def export_morph_controllers(self, mesh_lookup, geometry_morphs):
 		morph_lookup = {}
 		for mesh_name, targets in geometry_morphs.items():
 			morph_id = mesh_name + "-morph"
-			morph_lookup[mesh_name] = morph_id
+			morph_lookup[mesh_name] = [morph_id,targets]
 			mesh_id = mesh_lookup[mesh_name]
 			self.export_morph_controller(mesh_id, targets, morph_id)
 		return morph_lookup
@@ -544,10 +557,10 @@ class DaeExporter:
 	def export_morph_controller(self, mesh_id, morph_targets, morph_id):
 			self.writel(S_MORPH, 1, '<controller id="' + morph_id + '" name="' + morph_id + '">')
 			self.writel(S_MORPH, 2, '<morph source="#' + mesh_id + '" method="NORMALIZED">')
-			self.writel(S_MORPH, 3, '<source id="' + morph_id + '-morph-targets">')
-			self.writel(S_MORPH, 4, '<IDREF_array id="' + morph_id + '-morph-targets-array" count="' + str(len(morph_targets)) + '">')
-			marr = " ".join(morph_targets)  
-			warr = " ".join([str(0) for i in range(len(morph_targets))])
+			self.writel(S_MORPH, 3, '<source id="' + morph_id + '-targets">')
+			self.writel(S_MORPH, 4, '<IDREF_array id="' + morph_id + '-targets-array" count="' + str(len(morph_targets)) + '">')
+			marr = " ".join([name[0] for name in morph_targets])  
+			warr = " ".join([str(weight[1]) for weight in morph_targets])
 			self.writel(S_MORPH, 5, marr)
 			self.writel(S_MORPH, 4, '</IDREF_array>')
 			self.writel(S_MORPH, 4, '<technique_common>')
@@ -556,7 +569,7 @@ class DaeExporter:
 			self.writel(S_MORPH, 5, '</accessor>')
 			self.writel(S_MORPH, 4, '</technique_common>')
 			self.writel(S_MORPH, 3, '</source>')
-			self.writel(S_MORPH, 3, '<source id="' + morph_id + '-morph-weights">')
+			self.writel(S_MORPH, 3, '<source id="' + morph_id + '-weights">')
 			self.writel(S_MORPH, 4, '<float_array id="' + morph_id + '-weights-array" count="' + str(len(morph_targets)) + '" >')
 			self.writel(S_MORPH, 5, warr)
 			self.writel(S_MORPH, 4, '</float_array>')
@@ -567,8 +580,8 @@ class DaeExporter:
 			self.writel(S_MORPH, 4, '</technique_common>')
 			self.writel(S_MORPH, 3, '</source>')
 			self.writel(S_MORPH, 3, '<targets>')
-			self.writel(S_MORPH, 4, '<input semantic="MORPH_TARGET" source="#' + morph_id + '-morph-targets"/>')
-			self.writel(S_MORPH, 4, '<input semantic="MORPH_WEIGHT" source="#' + morph_id + '-morph-weights"/>')
+			self.writel(S_MORPH, 4, '<input semantic="MORPH_TARGET" source="#' + morph_id + '-targets"/>')
+			self.writel(S_MORPH, 4, '<input semantic="MORPH_WEIGHT" source="#' + morph_id + '-weights"/>')
 			self.writel(S_MORPH, 3, '</targets>')
 			self.writel(S_MORPH, 2, '</morph>')
 			self.writel(S_MORPH, 1, '</controller>')
@@ -584,7 +597,7 @@ class DaeExporter:
 			if not node.data.name in skin_controller_lookup.keys():
 				armatures = [mod for mod in node.modifiers.values() if (mod.type == "ARMATURE") and mod.use_vertex_groups]
 				for armature in armatures:
-					skin_id = node.data.name + "_" + armature.object.name + "-skin"
+					skin_id = node.data.name + "-" + armature.object.name + "-skin"
 					if (node.data.name in skin_controller_lookup):
 						skin_controller_lookup[node.data.name].append(skin_id)
 					else:
@@ -886,14 +899,9 @@ class DaeExporter:
 	
 			for b in armature.bones:
 				if (b.parent != None):
+					# this node will be exported when the parent exports its children
 					continue
 				self.export_armature_bone(b, il, self.skeleton_info[node], lookup, nodes_lookup, parenting_map)
-	
-			if (node.pose):
-				for b in node.pose.bones:
-					for x in b.constraints:
-						if (x.type == 'ACTION'):
-							self.action_constraints.append(x.action)
 		
 		finally:
 			# restore original pose position setting
@@ -1130,9 +1138,11 @@ class DaeExporter:
 				parent = self.get_bone_deform_parent(parent_bone)
 			if (not parent):
 				parent = armature
+				matrix=node.matrix_local.copy()
+			else:
+				parent=armature.pose.bones[node.parent_bone]
+				matrix = parent.matrix.inverted() * (armature.matrix_world.inverted() * node.matrix_world)
 			
-			# node.matrix_local is not in armature space, so generate a true armature space matrix from relative world matrices
-			matrix = parent.matrix_local.inverted() * (armature.matrix_world.inverted() * node.matrix_world)
 		else:
 			matrix = node.matrix_local.copy()
 		
@@ -1159,7 +1169,7 @@ class DaeExporter:
 			matrix = bone.matrix_local.copy()
 		# Bones are only scaled in pose mode
 		if (self.transform_matrix_scale):
-			return {"matrix":matrix, "scale":(1, 1, 1)}
+			return {"matrix":matrix, "scale":(1.0, 1.0, 1.0)}
 		else:
 			return {"matrix":matrix}
 			
@@ -1221,15 +1231,17 @@ class DaeExporter:
 			self.export_armature_node(node, il, lookup, nodes_lookup)
 		elif (node.data != None):
 			if (node.data.name in lookup["skin_controller"]):
-				skin_id = lookup["skin_controller"][node.data.name]
-				self.writel(S_NODES, il, '<instance_controller url="#' + skin_id + '">')
+				skin_id = lookup["skin_controller"][node.data.name][0]
+				skin_sid="skin"
+				self.writel(S_NODES, il, '<instance_controller url="#' + skin_id + '" sid="'+skin_sid+'">')
 				if (node.parent != None):
 					self.writel(S_NODES, il + 1, '<skeleton>#' + nodes_lookup[node.parent] + '</skeleton>')
 				self.export_material_bind(node, il, lookup)
 				self.writel(S_NODES, il, "</instance_controller>")
 			elif (node.data.name in lookup["geometry_morphs"]):
-				morph_id = lookup["morph"][node.data.name]
-				self.writel(S_NODES, il, '<instance_controller url="#' + morph_id + '">')
+				morph_id = lookup["morph"][node.data.name][0]
+				morph_sid="morph"
+				self.writel(S_NODES, il, '<instance_controller url="#' + morph_id + '" sid="'+morph_sid+'">')
 				self.export_material_bind(node, il, lookup)
 				self.writel(S_NODES, il, "</instance_controller>")
 			elif (node.data.name in lookup["mesh"]):
@@ -1591,7 +1603,7 @@ class DaeExporter:
 		nodes_lookup = {}
 				
 		self.writel(S_NODES, 0, '<library_visual_scenes>')
-		self.writel(S_NODES, 1, '<visual_scene id="' + self.scene_name + '" name="scene">')
+		self.writel(S_NODES, 1, '<visual_scene id="' + self.scene_name + '" name="'+ self.scene_name +'">')
 
 		for obj in self.valid_nodes:
 			if (obj.parent == None):
@@ -1613,23 +1625,19 @@ class DaeExporter:
 		self.writel(S_ASSET, 1, '<up_axis>Z_UP</up_axis>')
 		self.writel(S_ASSET, 0, '</asset>')
 
-	def export_animation_transform_channel(self, target, action_name, keys, matrices=True):
+	def export_animation_blends(self, target, action_name, keys):
 
 		frame_total = len(keys)
 		if (action_name == None):
 			anim_id = target + "-anim"
 		else:
 			anim_id = action_name + "-" + target + "-anim"
-			
+		anim_id=anim_id.replace("/","-")
+		
 		self.writel(S_ANIM, 1, '<animation id="' + anim_id + '">')
 
 		source_frames = " ".join([str(k[0]) for k in keys])
-		if (matrices):
-			source_matrix = " ".join([strmtx(k[1]['matrix']) for k in keys])
-			if (self.transform_matrix_scale):
-				source_scale = " ".join([str(e) for v in [k[1]['scale'] for k in keys] for e in v])
-		else:
-			source_value = " ".join([str(k[1]) for k in keys])
+		source_value = " ".join([str(k[1]) for k in keys])
 
 		source_interps = " ".join([(" LINEAR ") * len(keys)]) 
 
@@ -1643,36 +1651,83 @@ class DaeExporter:
 		self.writel(S_ANIM, 3, '</technique_common>')
 		self.writel(S_ANIM, 2, '</source>')
 
-		if (matrices):
-			# Transform Source
-			self.writel(S_ANIM, 2, '<source id="' + anim_id + '-matrix-output">')
-			self.writel(S_ANIM, 3, '<float_array id="' + anim_id + '-matrix-output-array" count="' + str(frame_total * 16) + '">' + source_matrix + '</float_array>')
-			self.writel(S_ANIM, 3, '<technique_common>')
-			self.writel(S_ANIM, 4, '<accessor source="#' + anim_id + '-matrix-output-array" count="' + str(frame_total) + '" stride="16">')
-			self.writel(S_ANIM, 5, '<param name="TRANSFORM" type="float4x4"/>')
-			self.writel(S_ANIM, 4, '</accessor>')
-			self.writel(S_ANIM, 3, '</technique_common>')
-			self.writel(S_ANIM, 2, '</source>')
-			
-			# Scale Source
-			if (self.transform_matrix_scale):
-				self.writel(S_ANIM, 2, '<source id="' + anim_id + '-scale-output">')
-				self.writel(S_ANIM, 3, '<float_array id="' + anim_id + '-scale-output-array" count="' + str(frame_total * 3) + '">' + source_scale + '</float_array>')
-				self.writel(S_ANIM, 3, '<technique_common>')
-				self.writel(S_ANIM, 4, '<accessor source="#' + anim_id + '-scale-output-array" count="' + str(frame_total) + '" stride="3">')
-				self.writel(S_ANIM, 5, '<param name="X" type="float"/>')
-				self.writel(S_ANIM, 5, '<param name="Y" type="float"/>')
-				self.writel(S_ANIM, 5, '<param name="Z" type="float"/>')
-				self.writel(S_ANIM, 4, '</accessor>')
-				self.writel(S_ANIM, 3, '</technique_common>')
-				self.writel(S_ANIM, 2, '</source>')
+		# Value Source
+		self.writel(S_ANIM, 2, '<source id="' + anim_id + '-weights-output">')
+		self.writel(S_ANIM, 3, '<float_array id="' + anim_id + '-weights-output-array" count="' + str(frame_total) + '">' + source_value + '</float_array>')
+		self.writel(S_ANIM, 3, '<technique_common>')
+		self.writel(S_ANIM, 4, '<accessor source="#' + anim_id + '-weights-output-array" count="' + str(frame_total) + '" stride="1">')
+		self.writel(S_ANIM, 5, '<param name="X" type="float"/>')
+		self.writel(S_ANIM, 4, '</accessor>')
+		self.writel(S_ANIM, 3, '</technique_common>')
+		self.writel(S_ANIM, 2, '</source>')
+
+		# Interpolation Source
+		self.writel(S_ANIM, 2, '<source id="' + anim_id + '-interpolation-output">')
+		self.writel(S_ANIM, 3, '<Name_array id="' + anim_id + '-interpolation-output-array" count="' + str(frame_total) + '">' + source_interps + '</Name_array>')
+		self.writel(S_ANIM, 3, '<technique_common>')
+		self.writel(S_ANIM, 4, '<accessor source="#' + anim_id + '-interpolation-output-array" count="' + str(frame_total) + '" stride="1">')
+		self.writel(S_ANIM, 5, '<param name="INTERPOLATION" type="Name"/>')
+		self.writel(S_ANIM, 4, '</accessor>')
+		self.writel(S_ANIM, 3, '</technique_common>')
+		self.writel(S_ANIM, 2, '</source>')
+
+		self.writel(S_ANIM, 2, '<sampler id="' + anim_id + '-weights-sampler">')
+		self.writel(S_ANIM, 3, '<input semantic="INPUT" source="#' + anim_id + '-input"/>')
+		self.writel(S_ANIM, 3, '<input semantic="OUTPUT" source="#' + anim_id + '-weights-output"/>')
+		self.writel(S_ANIM, 3, '<input semantic="INTERPOLATION" source="#' + anim_id + '-interpolation-output"/>')
+		self.writel(S_ANIM, 2, '</sampler>')
+
+		self.writel(S_ANIM, 2, '<channel source="#' + anim_id + '-weights-sampler" target="' + target + '"/>')
+		self.writel(S_ANIM, 1, '</animation>')
+
+		return anim_id
+
+	def export_animation_xforms(self, target, action_name, keys):
+
+		frame_total = len(keys)
+		if (action_name == None):
+			anim_id = target + "-anim"
 		else:
-			# Value Source
-			self.writel(S_ANIM, 2, '<source id="' + anim_id + '-transform-output">')
-			self.writel(S_ANIM, 3, '<float_array id="' + anim_id + '-transform-output-array" count="' + str(frame_total) + '">' + source_value + '</float_array>')
+			anim_id = action_name + "-" + target + "-anim"
+			
+		self.writel(S_ANIM, 1, '<animation id="' + anim_id + '">')
+
+		source_frames = " ".join([str(k[0]) for k in keys])
+		source_matrix = " ".join([strmtx(k[1]['matrix']) for k in keys])
+		if (self.transform_matrix_scale):
+			source_scale = " ".join([str(e) for v in [k[1]['scale'] for k in keys] for e in v])
+
+		source_interps = " ".join([(" LINEAR ") * len(keys)]) 
+
+		# Time Source
+		self.writel(S_ANIM, 2, '<source id="' + anim_id + '-input">')
+		self.writel(S_ANIM, 3, '<float_array id="' + anim_id + '-input-array" count="' + str(frame_total) + '">' + source_frames + '</float_array>')
+		self.writel(S_ANIM, 3, '<technique_common>')
+		self.writel(S_ANIM, 4, '<accessor source="#' + anim_id + '-input-array" count="' + str(frame_total) + '" stride="1">')
+		self.writel(S_ANIM, 5, '<param name="TIME" type="float"/>')
+		self.writel(S_ANIM, 4, '</accessor>')
+		self.writel(S_ANIM, 3, '</technique_common>')
+		self.writel(S_ANIM, 2, '</source>')
+
+		# Transform Source
+		self.writel(S_ANIM, 2, '<source id="' + anim_id + '-matrix-output">')
+		self.writel(S_ANIM, 3, '<float_array id="' + anim_id + '-matrix-output-array" count="' + str(frame_total * 16) + '">' + source_matrix + '</float_array>')
+		self.writel(S_ANIM, 3, '<technique_common>')
+		self.writel(S_ANIM, 4, '<accessor source="#' + anim_id + '-matrix-output-array" count="' + str(frame_total) + '" stride="16">')
+		self.writel(S_ANIM, 5, '<param name="TRANSFORM" type="float4x4"/>')
+		self.writel(S_ANIM, 4, '</accessor>')
+		self.writel(S_ANIM, 3, '</technique_common>')
+		self.writel(S_ANIM, 2, '</source>')
+		
+		# Scale Source
+		if (self.transform_matrix_scale):
+			self.writel(S_ANIM, 2, '<source id="' + anim_id + '-scale-output">')
+			self.writel(S_ANIM, 3, '<float_array id="' + anim_id + '-scale-output-array" count="' + str(frame_total * 3) + '">' + source_scale + '</float_array>')
 			self.writel(S_ANIM, 3, '<technique_common>')
-			self.writel(S_ANIM, 4, '<accessor source="#' + anim_id + '-transform-output-array" count="' + str(frame_total) + '" stride="1">')
+			self.writel(S_ANIM, 4, '<accessor source="#' + anim_id + '-scale-output-array" count="' + str(frame_total) + '" stride="3">')
 			self.writel(S_ANIM, 5, '<param name="X" type="float"/>')
+			self.writel(S_ANIM, 5, '<param name="Y" type="float"/>')
+			self.writel(S_ANIM, 5, '<param name="Z" type="float"/>')
 			self.writel(S_ANIM, 4, '</accessor>')
 			self.writel(S_ANIM, 3, '</technique_common>')
 			self.writel(S_ANIM, 2, '</source>')
@@ -1700,18 +1755,15 @@ class DaeExporter:
 			self.writel(S_ANIM, 3, '<input semantic="INTERPOLATION" source="#' + anim_id + '-interpolation-output"/>')
 			self.writel(S_ANIM, 2, '</sampler>')
 		
-		if (matrices):
-			self.writel(S_ANIM, 2, '<channel source="#' + anim_id + '-matrix-sampler" target="' + target + '/transform"/>')
-			if (self.transform_matrix_scale):
-				self.writel(S_ANIM, 2, '<channel source="#' + anim_id + '-scale-sampler" target="' + target + '/scale"/>')
-		else:
-			self.writel(S_ANIM, 2, '<channel source="#' + anim_id + '-sampler" target="' + target + '"/>')
+		self.writel(S_ANIM, 2, '<channel source="#' + anim_id + '-matrix-sampler" target="' + target + '/transform"/>')
+		if (self.transform_matrix_scale):
+			self.writel(S_ANIM, 2, '<channel source="#' + anim_id + '-scale-sampler" target="' + target + '/scale"/>')
 		self.writel(S_ANIM, 1, '</animation>')
 
-		return [anim_id]
+		return anim_id
 
-	def export_animation(self, start, end, action_name, lookup, allowed=None):
-
+	def get_animation_transforms(self, start, end, lookup):
+		
 		# Blender -> Collada frames needs a little work
 		# Collada starts from 0, blender usually from 1
 		# The last frame must be included also
@@ -1719,11 +1771,8 @@ class DaeExporter:
 		frame_orig = self.scene.frame_current
 
 		frame_len = 1.0 / self.scene.render.fps
-		frame_sub = 0
-		if (start > 0):
-			frame_sub = start * frame_len
+		frame_sub = (start-1) * frame_len
 
-		tcn = []
 		xform_cache = {}
 		blend_cache = {}
 		# Change frames first, export objects last
@@ -1731,47 +1780,24 @@ class DaeExporter:
 
 		for t in range(start, end + 1):
 			self.scene.frame_set(t)
-			key = t * frame_len - frame_sub
+			key = (t-1) * frame_len - frame_sub
 
 			for node in self.scene.objects:
 
 				if (not node in self.valid_nodes):
 					continue
-				if ((node.animation_data == None or node.animation_data.action == None) and (not len(node.constraints))):
-					continue
-				if ((node.type == "ARMATURE") and (node.data.pose_position == 'REST')):
-					continue
-				if (allowed != None and not (node in allowed)):
-					if (node.type == "MESH" and node.data != None and (node in self.armature_for_morph) and (self.armature_for_morph[node] in allowed)):
-						pass # all good you pass with flying colors for morphs inside of action
-					else:
-						continue 
-				if ((node.data != None) and (node.data.name in lookup["morph"])):
-					target = lookup["morph"][node.data.name]
-					for i in range(len(node.data.shape_keys.key_blocks)):
+				if (node.data and (node.data.name in lookup["morph"])):
+					morph_controller = lookup["morph"][node.data.name]
+					morph_id=morph_controller[0]
+					targets=morph_controller[1]
+					for i in range(1,len(node.data.shape_keys.key_blocks)):
 
-						if (i == 0):
-							continue
-
-						name = target + "-morph-weights(" + str(i - 1) + ")"
+						name = morph_id + "/" +targets[i-1][0]
 						if (not (name in blend_cache)):
 							blend_cache[name] = []
 
-						blend_cache[name].append((key, node.data.shape_keys.key_blocks[i].value))
+						self.append_morph_keyframe_if_different(blend_cache[name],key, node.data.shape_keys.key_blocks[i].value)
 
-
-				if (node.type == "MESH" and node.parent and node.parent.type == "ARMATURE"):
-
-					continue # In Collada, nodes that have skin modifier must not export animation, animate the skin instead.
-
-				if (len(node.constraints) > 0 or node.animation_data != None):
-					# If the node has constraints, or animation data, then export a sampled animation track
-					name = node.name
-					if (not (name in xform_cache)):
-						xform_cache[name] = []
-
-					transform = self.get_node_local_transform(node)
-					xform_cache[name].append((key, transform))
 
 				if (node.type == "ARMATURE"):
 					# All bones exported for now
@@ -1782,102 +1808,204 @@ class DaeExporter:
 						if (bone_name is None or not self.skeleton_info[node]["has_transform"][bone]):
 							continue
 
-						if (not (bone_name in xform_cache)):
-							xform_cache[bone_name] = []
-
 						posebone = node.pose.bones[bone.name]
 						transform = self.get_posebone_transform(node.pose.bones, posebone)
-						xform_cache[bone_name].append((key, transform))
+						if (not (bone_name in xform_cache)):
+							xform_cache[bone_name] = []
+						self.append_keyframe_if_different(xform_cache[bone_name],transform,key)
+
+				name = node.name
+				transform = self.get_node_local_transform(node)
+				if (not (name in xform_cache)):
+					xform_cache[name] = []
+				self.append_keyframe_if_different(xform_cache[name],transform,key)
 
 		self.scene.frame_set(frame_orig)
 
-		# export animation xml
-		for nid in xform_cache:
-			tcn += self.export_animation_transform_channel(nid, action_name, xform_cache[nid], True)
-		for nid in blend_cache:
-			tcn += self.export_animation_transform_channel(nid, action_name, blend_cache[nid], False)
-
-		return tcn
-
-	def export_animations(self, lookup):
-		tmp_mat = []
-		for s in self.skeletons:
-			tmp_bone_mat = []
-			for bone in s.pose.bones:
-				tmp_bone_mat.append(Matrix(bone.matrix_basis))
-				bone.matrix_basis = Matrix()
-			tmp_mat.append([Matrix(s.matrix_local), tmp_bone_mat])
-
-		self.writel(S_ANIM, 0, '<library_animations>')
-
-		if (self.config["use_anim_action_all"] and len(self.skeletons)):
-
-			cached_actions = {}
-
-			for s in self.skeletons:
-				if s.animation_data and s.animation_data.action:
-					cached_actions[s] = s.animation_data.action.name
-
-
-			self.writel(S_ANIM_CLIPS, 0, '<library_animation_clips>')
-
-			for x in bpy.data.actions[:]:
-				if x.users == 0 or x in self.action_constraints:
-					continue
-				if (self.config["use_anim_skip_noexp"] and x.name.endswith("-noexp")):
-					continue
-
-				bones = []
-				# find bones used
-				for p in x.fcurves:
-					dp = str(p.data_path)
-					base = "pose.bones[\""
-					if (dp.find(base) == 0):
-						dp = dp[len(base):]
-						if (dp.find('"') != -1):
-							dp = dp[:dp.find('"')]
-							if (not dp in bones):
-								bones.append(dp)
-
-				allowed_skeletons = []
-				for i, y in enumerate(self.skeletons):
-					if (y.animation_data):
-						for z in y.pose.bones:
-							if (z.bone.name in bones):
-								if (not y in allowed_skeletons):
-									allowed_skeletons.append(y)
-						y.animation_data.action = x;
-
-						y.matrix_local = tmp_mat[i][0]
-						for j, bone in enumerate(s.pose.bones):
-							bone.matrix_basis = Matrix()
-
-				tcn = self.export_animation(int(x.frame_range[0]), int(x.frame_range[1] + 0.5), x.name, lookup, allowed_skeletons)
-				framelen = (1.0 / self.scene.render.fps)
-				start = x.frame_range[0] * framelen
-				end = x.frame_range[1] * framelen
-				self.writel(S_ANIM_CLIPS, 1, '<animation_clip name="' + x.name + '" start="' + str(start) + '" end="' + str(end) + '">')
-				for z in tcn:
-					self.writel(S_ANIM_CLIPS, 2, '<instance_animation url="#' + z + '"/>')
-				self.writel(S_ANIM_CLIPS, 1, '</animation_clip>')
-				if (len(tcn) == 0):
-					self.operator.report({'WARNING'}, 'Animation clip "' + x.name + '" contains no tracks.')
-
-			self.writel(S_ANIM_CLIPS, 0, '</library_animation_clips>')
-
-			for i, s in enumerate(self.skeletons):
-				if (s.animation_data == None):
-					continue
-				if s in cached_actions:
-					s.animation_data.action = bpy.data.actions[cached_actions[s]]
-				else:
-					s.animation_data.action = None
-					for j, bone in enumerate(s.pose.bones):
-						bone.matrix_basis = tmp_mat[i][1][j]
-
+		xform_cache = self.xform_cache_without_constants(xform_cache)
+		blend_cache=self.blend_cache_without_constants(blend_cache)
+		
+		return xform_cache, blend_cache
+	
+	def append_morph_keyframe_if_different(self,morph_keyframes,new_key,new_value):
+		different=False
+		if (len(morph_keyframes)):
+			prev_value=morph_keyframes[-1][1];
+			if (abs(prev_value-new_value)>CMP_EPSILON):
+				different = True
 		else:
-			self.export_animation(self.scene.frame_start, self.scene.frame_end, None, lookup)
+			different=True
+		
+		if different:
+			morph_keyframes.append((new_key,new_value))
+	
+	def blend_cache_without_constants(self,blend_cache):
+		# remove morph animations that only have one weight value
+		blend_result={}
+		for name,keyframes in blend_cache.items():
+			if (len(keyframes)>1):
+				blend_result[name]=keyframes
+				
+		return blend_result
+			
+	def xform_cache_without_constants(self,xform_cache):
+		# remove fcurves that have only one transformation over the entire timeline
+		xform_result={}
+		for name,transforms in xform_cache.items():
+			if (len(transforms)>1):
+				xform_result[name]=transforms
+		return xform_result
+	
+	def append_keyframe_if_different(self,transforms,new_transform,new_key):
+		different=False
 
+		if (len(transforms)):
+			prev_transform=transforms[-1][1];
+			prev_matrix=prev_transform.get("matrix")
+			new_matrix=new_transform.get("matrix")
+			if (prev_matrix and new_matrix):
+				same_matrix=matrix_equal(prev_matrix,new_matrix)
+			else:
+				same_matrix=True
+			
+			different=not same_matrix
+			
+			if (not different):
+				prev_scale	=prev_transform.get("scale")
+				new_scale=new_transform.get("scale")
+				if (prev_scale and new_scale):
+					same_scale=vector_equal(prev_scale,new_scale)
+				else:
+					same_scale=True
+				different=not same_scale
+		else:
+			different=True
+		
+		if (different):
+			transforms.append((new_key,new_transform))
+			
+	def get_NLA_objects(self):
+		objects={}
+		
+		for node in self.scene.objects:
+			if node.animation_data and node.animation_data.nla_tracks:
+				objects[node]=[]
+				tracks=node.animation_data.nla_tracks
+				for track in tracks:
+					if track.strips:
+						strips=[]
+						for strip in track.strips:
+							strips.append((strip, strip.mute))
+						objects[node].append((track,track.mute,strips))
+				
+		return objects
+	
+	def mute_NLA(self,nla_objects):
+		for tracks in nla_objects.values():
+			for track in tracks:
+				track[0].mute=True
+				for strip in track[2]:
+					strip[0].mute=True
+			
+	def restore_NLA(self,nla_objects):
+		for tracks in nla_objects.values():
+			for track in tracks:
+				track[0].mute=track[1]
+				for strip in track[2]:
+					strip[0].mute=strip[1]
+		
+		
+	def export_animation_clip(self, id, start, end, tcn):
+		self.writel(S_ANIM_CLIPS, 1, '<animation_clip id="' + id + "-clip" + '" start="' + str((start-1) / self.scene.render.fps) + '" end="' + str((end-1) / self.scene.render.fps) + '">')
+		for z in tcn:
+			self.writel(S_ANIM_CLIPS, 2, '<instance_animation url="#' + z + '"/>')
+		self.writel(S_ANIM_CLIPS, 1, '</animation_clip>')
+
+
+	def export_timeline(self, action_name,start,end,lookup):
+		xform_cache, blend_cache = self.get_animation_transforms(start,end, lookup)
+		tcn = []
+		for nid,cache in xform_cache.items():
+			tcn.append(self.export_animation_xforms(nid, action_name, cache))
+		for nid,cache in blend_cache.items():
+			tcn.append(self.export_animation_blends(nid, action_name, cache))
+		self.export_animation_clip(action_name, start,end, tcn)
+
+	def unmute_NLA_object(self,node):
+		for track in node.animation_data.nla_tracks:
+			track.mute=False
+			for strip in track.strips:
+				strip.mute=False
+
+	def unmute_NLA_track(self,track):
+		track.mute=False
+		for strip in track.strips:
+			strip.mute=False
+								
+	def get_NLA_object_timeline(self,node):
+		start = sys.float_info.max;
+		end=-sys.float_info.max;
+		for track in node.animation_data.nla_tracks:
+			for strip in track.strips:
+				if start>strip.frame_start:
+					start=strip.frame_start
+				if end<strip.frame_end:
+					end=strip.frame_end
+		
+		return int(start),int(end)
+		
+
+	def get_NLA_track_timeline(self,track):
+		start = sys.float_info.max;
+		end=-sys.float_info.max;
+		for strip in track.strips:
+			if start>strip.frame_start:
+				start=strip.frame_start
+			if end<strip.frame_end:
+				end=strip.frame_end
+		
+		return int(start),int(end)
+	
+	def export_animations(self, lookup):
+		
+		self.writel(S_ANIM, 0, '<library_animations>')
+		self.writel(S_ANIM_CLIPS, 0, '<library_animation_clips>')
+
+		if (self.config["use_anim_timeline"]):
+			self.export_timeline("timeline",self.scene.frame_start,self.scene.frame_end,lookup)
+
+		if self.config["clip_type"]!='NONE':
+			nla = self.get_NLA_objects()
+
+			if self.config["clip_type"]=='OBJECT':
+				for node in nla.keys():
+					self.mute_NLA(nla)
+					self.unmute_NLA_object(node)
+					start,end = self.get_NLA_object_timeline(node)
+					self.export_timeline(node.name,start,end,lookup)
+			
+			if self.config["clip_type"]=='TRACK':
+				for tracks in nla.values():
+					for track in tracks:
+						self.mute_NLA(nla)
+						self.unmute_NLA_track(track[0])
+						start,end = self.get_NLA_track_timeline(track[0])
+						self.export_timeline(track[0].name,start,end,lookup)
+						
+			if self.config["clip_type"]=='STRIP':
+				for tracks in nla.values():
+					for track in tracks:
+						for strip in track[2]:
+							strip[0].mute=False
+							start =int(strip[0].frame_start)
+							end = int(strip[0].frame_end)
+							self.export_timeline(strip[0].name,start,end,lookup)
+							strip[0].mute=True
+			
+			
+			self.restore_NLA(nla)
+
+		self.writel(S_ANIM_CLIPS, 0, '</library_animation_clips>')
 		self.writel(S_ANIM, 0, '</library_animations>')
 
 	def remove_export_meshes(self):
@@ -1898,7 +2026,6 @@ class DaeExporter:
 
 			self.get_valid_nodes()
 			self.skeletons = []
-			self.action_constraints = []
 			self.export_asset()
 			material_lookup = self.export_materials()
 			mesh_lookup, convex_mesh_lookup, geometry_morphs, material_bind_lookup = self.export_meshes()
@@ -1927,8 +2054,7 @@ class DaeExporter:
 				lookup["physics_model"] = physics_model_lookup
 				self.export_physics_scene(lookup)
 
-			if (self.config["use_anim"]):
-				self.export_animations(lookup)
+			self.export_animations(lookup)
 	
 			self.writel(S_GEOM, 0, '</library_geometries>')
 			
@@ -1983,7 +2109,8 @@ class DaeExporter:
 		self.operator = operator
 		self.scene = bpy.context.scene
 		self.last_id = 0
-		self.scene_name = self.new_id("scene")
+		self.scene_name = os.path.basename(bpy.data.filepath)
+		self.scene_name=self.scene_name.replace(".blend","")
 		self.sections = {}
 		self.path = path
 		self.skeleton_info = {}

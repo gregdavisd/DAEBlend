@@ -104,17 +104,12 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
     use_copy_images = BoolProperty(
             name="Copy Images",
             description="Copy Images (create images/ subfolder)",
-            default=False,
+            default=True,
             )
     use_active_layers = BoolProperty(
             name="Active Layers",
             description="Export only objects on the active layers.",
             default=True,
-            )
-    use_anim = BoolProperty(
-            name="Export Animation",
-            description="Export keyframe animation",
-            default=False,
             )
     use_physics = BoolProperty(
             name="Export Physics",
@@ -122,22 +117,29 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
             default=True,
             )
     
-    use_anim_action_all = BoolProperty(
-            name="All Actions",
-            description=("Export all actions for the first armature found in separate DAE files"),
+    use_anim_timeline = BoolProperty(
+            name="Timeline",
+            description=("Export the main timeline animation"),
             default=True,
             )
+    
+    clip_type = EnumProperty(
+        name="Clips",
+        items=(('NONE', "None", "No animation clips"),
+                ('OBJECT', "Objects", "Blended tracks for each object in the NLA editor"),
+               ('TRACK', "Tracks", "A clip for each NLA track"),
+               ('STRIP', "Strips", "A clip for each action on the NLA tracks")),
+        description="Style of animation clips",
+        default='OBJECT',
+        )
+        
     use_deform_bone_only = BoolProperty(
         name="Deform Only",
         description="Skip exporting of bones which have 'Deform' unchecked. "
         "If the bone is the parent of any geometry then it will still be exported.",
         default=True,
         )
-    use_anim_skip_noexp = BoolProperty(
-        name="Skip (-noexp) Actions",
-        description="Skip exporting of actions whose name end in (-noexp). Useful to skip control animations.",
-        default=True,
-        )
+
 
     @property
     def check_extension(self):
