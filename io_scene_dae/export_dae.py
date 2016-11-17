@@ -1117,16 +1117,19 @@ class DaeExporter:
 		matrix[2][2] = 1.0 / vector[2]
 		return matrix
 
-	def remove_matrix_scale(self, matrix, scale):
-		# multiply this matrix with an inverse of the scale without affecting the translation component
-		
-		translation = matrix.to_translation()
-		matrix3 = matrix.to_3x3()
-		inverse_scale = self.inverted_scale_matrix(scale)
-		matrix3 = inverse_scale * matrix3
-		new_matrix = matrix3.to_4x4()
-		new_matrix.translation = translation
-		return new_matrix
+	def get_node_bone_parenting(self,node):
+		scan_node=node
+		while (scan_node.parent):
+			if (scan_node.parent_type == 'BONE'):
+				armature = scan_node.parent
+				if (armature.data.bones[scan_node.parent_bone].use_deform):
+					parent_bone = armature.pose.bones[scan_node.parent_bone]
+					return armature,parent_bone
+				else:
+					scan_node=scan_node.parent
+			else:
+				scan_node=scan_node.parent
+		return None,None
 		
 	def get_node_local_transform(self, node):
 		if (node.parent_type == 'BONE'):
@@ -1144,13 +1147,17 @@ class DaeExporter:
 				matrix = parent.matrix.inverted() * (armature.matrix_world.inverted() * node.matrix_world)
 			
 		else:
-			matrix = node.matrix_local.copy()
+			if (node.parent):
+				matrix= node.parent.matrix_world.inverted() * node.matrix_world
+			else:
+				matrix = node.matrix_local.copy()
 		
 		if (self.transform_matrix_scale):
-			matrix = self.remove_matrix_scale(matrix, node.scale)
-			return {"matrix":matrix, "scale":node.scale.copy()}
+			matrix,scale=self.split_matrix_scale(matrix)
+			return {"matrix":matrix, "scale":scale}
 		else:
 			return {"matrix":matrix}
+
 		
 	def get_bone_deform_parent(self, bone):
 		# traverse up bone parenting to get a parent bone that has deform checked
@@ -1158,6 +1165,11 @@ class DaeExporter:
 		while ((parent != None) and not parent.use_deform):
 			parent = parent.parent
 		return parent
+	
+	def split_matrix_scale(self,matrix):
+		m = matrix.normalized()
+		m.translation=matrix.to_translation()
+		return m, matrix.to_scale()
 	
 	def get_bone_transform(self, bone):
 		# get the transform relative to the parent bone.
@@ -1176,7 +1188,7 @@ class DaeExporter:
 	def get_posebone_transform(self, posebones_map, posebone):
 		# get posebone transform relative to its parent bone, if no parent bone then relative to the armature
 		matrix = posebone.matrix.copy()
-		if (posebone.bone.parent is not None):
+		if (posebone.bone.parent):
 			parent_bone = self.get_bone_deform_parent(posebone.bone)
 			if (parent_bone):
 				parent = posebones_map[parent_bone.name]
@@ -1191,8 +1203,8 @@ class DaeExporter:
 					matrix = parent.matrix.inverted() * matrix
 				
 		if (self.transform_matrix_scale):
-			matrix = self.remove_matrix_scale(matrix, posebone.scale)
-			return {"matrix":matrix, "scale":posebone.scale.copy()}
+			matrix,scale=self.split_matrix_scale(matrix)
+			return {"matrix":matrix, "scale":scale}
 		else:
 			return {"matrix":matrix}
 		
@@ -1780,6 +1792,8 @@ class DaeExporter:
 
 		for t in range(start, end + 1):
 			self.scene.frame_set(t)
+			# self.scene.update();
+			
 			key = (t-1) * frame_len - frame_sub
 
 			for node in self.scene.objects:
