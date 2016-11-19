@@ -1,9 +1,0 @@
-Collada Exporter
------------------------------------
-
-1) Copy the "io_scene_dae" directory  to wherever blender stores the 
-   scripts/addons folder Copy the entire dir, not just the contents, 
-   make it just like the others.
-2) Go to Blender settings and enable the "Python Collada Export" plugin
-
-   
