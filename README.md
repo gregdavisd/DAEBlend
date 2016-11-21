@@ -1,8 +1,6 @@
 # Blender-Collada
 Python script to export Collada DAE files from Blender.
 
-There is no stable release yet so clone the latest files from the repository to get the latest bug fixes and features.
-
 Currently exports:
 - Meshes and curves, including meshes generated from a curve.
 - Animation actions or the complete animation timeline
@@ -12,6 +10,8 @@ Currently exports:
 - Morph targets (shape keys)
 - Cameras
 - Lamps
+
+There is no stable release yet so clone the latest files from the repository to get the latest bug fixes and features.
 
 Elements are given meaningful identifiers that can be related back to the original Blender document. Relating the XML tags back to Blender helps when editing the XML document post export.
 
