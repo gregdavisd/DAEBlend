@@ -140,8 +140,8 @@ class DaeExporter:
 				os.makedirs(basedir)
 			if os.path.isfile(imgpath):
 				dstfile = basedir + "/" + os.path.basename(imgpath)
-				if (not os.path.isfile(dstfile)):
-					shutil.copy(imgpath, dstfile)
+				#if (not os.path.isfile(dstfile)):
+				shutil.copy(imgpath, dstfile)
 				imgpath = "images/" + os.path.basename(imgpath)
 			else:
 				# ## if file is not found save it as png file in the destination folder
@@ -153,9 +153,9 @@ class DaeExporter:
 
 				dstfile = basedir + "/" + os.path.basename(image.filepath)
 
-				if (not os.path.isfile(dstfile)):
+				#if (not os.path.isfile(dstfile)):
+				image.save()
 
-					image.save()
 				imgpath = "images/" + os.path.basename(image.filepath)
 				image.filepath = img_tmp_path
 		else:
@@ -184,6 +184,7 @@ class DaeExporter:
 		specular_tex = None
 		emission_tex = None
 		normal_tex = None
+		ambient_tex=None
 		done_images = set()
 		
 		for i in range(len(material.texture_slots)):
@@ -198,7 +199,7 @@ class DaeExporter:
 				continue
 
 			# image
-			imgid = image_lookup[ts.texture.image.name]
+			imgid = image_lookup.get(ts.texture.image,None)
 			if (not imgid):
 				continue
 			if (imgid in done_images):
@@ -221,6 +222,9 @@ class DaeExporter:
 				emission_tex = sampler_sid
 			if (ts.use_map_normal and normal_tex == None):
 				normal_tex = sampler_sid
+			if (ts.use_map_ambient and ambient_tex == None):
+				ambient_tex = sampler_sid
+			
 
 		self.writel(S_FX, 3, '<technique sid="common">')
 		shtype = "blinn"
@@ -234,17 +238,20 @@ class DaeExporter:
 			self.writel(S_FX, 6, '<color>' + numarr_alpha(material.diffuse_color, material.emit) + ' </color>') # not totally right but good enough
 		self.writel(S_FX, 5, '</emission>')
 		self.writel(S_FX, 5, '<ambient>')
-		self.writel(S_FX, 6, '<color>' + numarr_alpha(self.scene.world.ambient_color, material.ambient) + ' </color>')
+		if (ambient_tex != None):
+			self.writel(S_FX, 6, '<texture texture="' + ambient_tex + '" texcoord="ambient"/>')
+		else:
+			self.writel(S_FX, 6, '<color>' + numarr_alpha(self.scene.world.ambient_color, material.ambient) + ' </color>')
 		self.writel(S_FX, 5, '</ambient>')
 		self.writel(S_FX, 5, '<diffuse>')
 		if (diffuse_tex != None):
-			self.writel(S_FX, 6, '<texture texture="' + diffuse_tex + '" texcoord="CHANNEL1"/>')
+			self.writel(S_FX, 6, '<texture texture="' + diffuse_tex + '" texcoord="diffuse"/>')
 		else:
 			self.writel(S_FX, 6, '<color>' + numarr_alpha(material.diffuse_color, material.diffuse_intensity) + '</color>')
 		self.writel(S_FX, 5, '</diffuse>')
 		self.writel(S_FX, 5, '<specular>')
 		if (specular_tex != None):
-			self.writel(S_FX, 6, '<texture texture="' + specular_tex + '" texcoord="CHANNEL1"/>')
+			self.writel(S_FX, 6, '<texture texture="' + specular_tex + '" texcoord="specular"/>')
 		else:
 			self.writel(S_FX, 6, '<color>' + numarr_alpha(material.specular_color, material.specular_intensity) + '</color>')
 		self.writel(S_FX, 5, '</specular>')
@@ -264,15 +271,10 @@ class DaeExporter:
 		self.writel(S_FX, 6, '<float>' + str(material.specular_ior) + '</float>')
 		self.writel(S_FX, 5, '</index_of_refraction>')
 		self.writel(S_FX, 4, '</' + shtype + '>')
-		if (normal_tex is not None):
-			self.writel(S_FX, 4, '<extra>')
-			self.writel(S_FX, 5, '<technique profile="FCOLLADA">')
-			if (normal_tex):
-				self.writel(S_FX, 6, '<bump bumptype="NORMALMAP">')
-				self.writel(S_FX, 7, '<texture texture="' + normal_tex + '" texcoord="CHANNEL1"/>')
-				self.writel(S_FX, 6, '</bump>')
-			self.writel(S_FX, 5, '</technique>')
-			self.writel(S_FX, 4, '</extra>')
+		if (normal_tex):
+			self.writel(S_FX, 4, '<bump bumptype="NORMALMAP">')
+			self.writel(S_FX, 5, '<texture texture="' + normal_tex + '" texcoord="normal"/>')
+			self.writel(S_FX, 4, '</bump>')
 		self.writel(S_FX, 3, '</technique>')
 		self.writel(S_FX, 2, '</profile_COMMON>')
 		self.writel(S_FX, 1, '</effect>')
@@ -327,15 +329,17 @@ class DaeExporter:
 			mesh.calc_normals_split()
 			return False
 
-	def get_mesh_surfaces(self, node, mesh):
+	def get_mesh_surfaces(self, mesh):
+		# Turn the mesh into buffers and index buffers, polygons are grouped by material index
 		
 		# get vertices
 		vertices = [Vector(v.co) for v in mesh.vertices.values()]
 
 		# get polygons
-		loop_vertices, materials = self.get_polygon_groups(mesh)
+		loop_vertices  = self.get_polygon_groups(mesh)
 
 		# convert dictionary of loop vertices to dictionary of vertex indices
+		# v[0] is loop index, v[1] is the vertex 
 		surface_v_indices = {g:s for (g, s) in 
 							zip(loop_vertices.keys(),
 										[[[v[1].vertex_index for v in p] for p in g] for g in loop_vertices.values()])}
@@ -378,7 +382,14 @@ class DaeExporter:
 		if (mesh.vertex_colors):
 			colors = [c.color for c in mesh.vertex_colors.active.data.values()]
 			
-		return vertices, normals, uv, colors, surface_v_indices, surface_normal_indices, surface_uv_indices, materials
+		#vertices = array of xyz point tuples
+		#normals = array of xyz vector tuples associated with vertices array
+		#uv = array of uv point tuples associated with vertices array
+		# colors = array of r,g,b color tuples associated with vertices array
+		#surface_v_indices = Key: is the material slot index for the group of polygons, Values: is a list of integer vertex indices (into vertices array)
+		#surface_normal_indices =  Key: is the material slot index for the group of polygons,Values: is a list of integer normal indices (into normals array)
+		#surface_uv_indices = Key: is the material slot index for the group of polygons,Values: is a list of integer uv indices (into uv array)
+		return vertices, normals, uv, colors, surface_v_indices, surface_normal_indices, surface_uv_indices
 	
 	def get_polygon_groups(self, mesh):
 		# get a dictionary of polygons with loop vertices grouped by material
@@ -394,16 +405,6 @@ class DaeExporter:
 			
 			if (not (f.material_index in vertices)):
 				vertices[f.material_index] = []
-				
-				if (len(mesh.materials)):
-					mat = mesh.materials[f.material_index]
-				else:
-					mat = None
-					
-				if (mat != None):
-					materials[f.material_index] = mat.name
-				else:
-					materials[f.material_index] = None # weird, has no material?
 
 			loop_vertices = vertices[f.material_index]
 
@@ -416,7 +417,10 @@ class DaeExporter:
 				
 			loop_vertices.append(polygon)
 		
-		return	vertices, materials
+		#vertices[material index][polygons][loop index, MeshLoop]
+		# i.e. [smoothing group][polygons][loop index,vertex]
+		
+		return	vertices
 
 	def node_has_convex_hull(self, node):
 		if (not self.config["use_physics"]):
@@ -468,7 +472,7 @@ class DaeExporter:
 		geometry_morphs = {}
 		material_bind_lookup = {}
 		for node in meshes:
-			if (node.data.name in geometry_lookup):
+			if (node.data in geometry_lookup):
 				# already exported
 				continue
 			
@@ -478,11 +482,11 @@ class DaeExporter:
 			
 			# export the mesh
 			if (mesh):
-				mesh_id = node.data.name + "-mesh"
+				mesh_id = self.get_node_id(node.data.name + "-mesh")
 				material_bind = self.export_mesh(mesh, mesh_id, node.data.name, triangulate)
-				geometry_lookup[node.data.name] = mesh_id
+				geometry_lookup[node.data] = mesh_id
 				if (len(material_bind)):
-					material_bind_lookup[node.data.name] = material_bind
+					material_bind_lookup[node.data] = material_bind
 					
 				# export convex hull if needed by physics scene
 				
@@ -492,20 +496,20 @@ class DaeExporter:
 						convex_mesh_id = mesh_id + "-convex"
 						valid, material_bind = self.export_mesh(convex_mesh, convex_mesh_id, node.data.name, triangulate, True)
 						if (valid):
-							convex_geometry_lookup[node.data.name] = convex_mesh_id
+							convex_geometry_lookup[node.data] = convex_mesh_id
 							
 				# export morphs from shape keys
 				
 				morphs = self.export_mesh_morphs(node, mesh_id)
 				if (morphs):
-					geometry_morphs[node.data.name] = morphs
+					geometry_morphs[node.data] = morphs
 					
 			else:
 				if(node.type == "CURVE"):
 					# All else failed so export a Bezier curve
-					curve_id = node.data.name + "-curve"
+					curve_id = self.get_node_id(node.data.name + "-curve")
 					self.export_curve(node.data, curve_id)
-					geometry_lookup[node.data.name] = curve_id
+					geometry_lookup[node.data] = curve_id
 					
 		self.remove_export_meshes()
 			
@@ -532,7 +536,7 @@ class DaeExporter:
 				node.active_shape_key_index = k
 				shape.value = 1.0
 				mesh.update()
-				morph_id = mesh_id + "-morph-"+shape.name
+				morph_id = self.get_node_id(mesh_id + "-morph-"+shape.name)
 				morph_targets.append([morph_id,values[k-1]])
 				export_mesh = self.node_to_mesh(node, triangulate)
 				self.export_mesh(export_mesh, morph_id, morph_id, triangulate)
@@ -541,16 +545,18 @@ class DaeExporter:
 			node.show_only_shape_key = scene_show_only_shape_key
 			node.active_shape_key_index = scene_active_shape_key
 			mesh.update
+			
+			# morph_targets = [id of morph shape mesh, the shape key index corrected to remove the basis (shape key 1 is index 0)
 			return morph_targets
 		else:	
 			return None;
 	
 	def export_morph_controllers(self, mesh_lookup, geometry_morphs):
 		morph_lookup = {}
-		for mesh_name, targets in geometry_morphs.items():
-			morph_id = mesh_name + "-morph"
-			morph_lookup[mesh_name] = [morph_id,targets]
-			mesh_id = mesh_lookup[mesh_name]
+		for mesh, targets in geometry_morphs.items():
+			morph_id = self.get_node_id(mesh.name + "-morph")
+			morph_lookup[mesh] = [morph_id,targets]
+			mesh_id = mesh_lookup[mesh]
 			self.export_morph_controller(mesh_id, targets, morph_id)
 		return morph_lookup
 		
@@ -588,24 +594,24 @@ class DaeExporter:
 
 	def export_skin_controllers(self, mesh_lookup, morph_lookup):
 		meshes = 	set(
-			filter(lambda obj : (obj.type == "MESH") and (obj.data.name in mesh_lookup.keys()), self.valid_nodes)
+			filter(lambda obj : (obj.type == "MESH") and (obj.data in mesh_lookup.keys()), self.valid_nodes)
 		);
 		
 		skin_controller_lookup = {}
 		
 		for node in meshes:
-			if not node.data.name in skin_controller_lookup.keys():
+			if not node.data in skin_controller_lookup.keys():
 				armatures = [mod for mod in node.modifiers.values() if (mod.type == "ARMATURE") and mod.use_vertex_groups]
 				for armature in armatures:
-					skin_id = node.data.name + "-" + armature.object.name + "-skin"
-					if (node.data.name in skin_controller_lookup):
-						skin_controller_lookup[node.data.name].append(skin_id)
+					skin_id = self.get_node_id(node.data.name + "-" + armature.object.name + "-skin")
+					if (node.data in skin_controller_lookup):
+						skin_controller_lookup[node.data].append(skin_id)
 					else:
-						skin_controller_lookup[node.data.name] = skin_id
-					if (node.data.name in morph_lookup):
-						mesh_id = morph_lookup[node.data.name]
+						skin_controller_lookup[node.data] = skin_id
+					if (node.data in morph_lookup):
+						mesh_id = morph_lookup[node.data]
 					else:
-						mesh_id = mesh_lookup[node.data.name]
+						mesh_id = mesh_lookup[node.data]
 					self.export_skin_controller(node, armature.object, mesh_id , skin_id)
 		return skin_controller_lookup	
 		
@@ -676,9 +682,9 @@ class DaeExporter:
 
 	def export_mesh(self, mesh, mesh_id, mesh_name, triangulated, convex=False):
 
-		vertices, normals, uv, colors, surface_v_indices, surface_normal_indices, surface_uv_indices, materials = self.get_mesh_surfaces(node, mesh)
+		vertices, normals, uv, colors, surface_v_indices, surface_normal_indices, surface_uv_indices = self.get_mesh_surfaces(mesh)
 		
-		has_vertex = True	
+		has_vertex = len(vertices)>0	
 		has_normals = len(normals) > 0
 		has_uv = len(uv) > 0	
 		has_colors = len(colors) > 0
@@ -690,17 +696,18 @@ class DaeExporter:
 			self.writel(S_GEOM, 2, '<mesh>')
 
 		# Vertex Array
-		self.writel(S_GEOM, 3, '<source id="' + mesh_id + '-positions">')
-		float_values = " ".join([str(c) for v in [[v.x, v.y, v.z] for v in vertices] for c in v])
-		self.writel(S_GEOM, 4, '<float_array id="' + mesh_id + '-positions-array" count="' + str(len(vertices) * 3) + '">' + float_values + '</float_array>')
-		self.writel(S_GEOM, 4, '<technique_common>')
-		self.writel(S_GEOM, 5, '<accessor source="#' + mesh_id + '-positions-array" count="' + str(len(vertices)) + '" stride="3">')
-		self.writel(S_GEOM, 6, '<param name="X" type="float"/>')
-		self.writel(S_GEOM, 6, '<param name="Y" type="float"/>')
-		self.writel(S_GEOM, 6, '<param name="Z" type="float"/>')
-		self.writel(S_GEOM, 5, '</accessor>')
-		self.writel(S_GEOM, 4, '</technique_common>')
-		self.writel(S_GEOM, 3, '</source>')
+		if (has_vertex):
+			self.writel(S_GEOM, 3, '<source id="' + mesh_id + '-positions">')
+			float_values = " ".join([str(c) for v in [[v.x, v.y, v.z] for v in vertices] for c in v])
+			self.writel(S_GEOM, 4, '<float_array id="' + mesh_id + '-positions-array" count="' + str(len(vertices) * 3) + '">' + float_values + '</float_array>')
+			self.writel(S_GEOM, 4, '<technique_common>')
+			self.writel(S_GEOM, 5, '<accessor source="#' + mesh_id + '-positions-array" count="' + str(len(vertices)) + '" stride="3">')
+			self.writel(S_GEOM, 6, '<param name="X" type="float"/>')
+			self.writel(S_GEOM, 6, '<param name="Y" type="float"/>')
+			self.writel(S_GEOM, 6, '<param name="Z" type="float"/>')
+			self.writel(S_GEOM, 5, '</accessor>')
+			self.writel(S_GEOM, 4, '</technique_common>')
+			self.writel(S_GEOM, 3, '</source>')
 
 		# Normal Array
 		if (has_normals):
@@ -773,14 +780,13 @@ class DaeExporter:
 		
 		material_bind = {}
 		
-		for m in surface_v_indices:
+		for mat_index,polygons in surface_v_indices.items():
 			
 			# Every renderable mesh must have a material symbol even if no material is assigned in Blender.
-			matref = self.get_material_link_symbol(materials[m])
-			if (materials[m] != None):
-				material_bind[materials[m]] = matref
+			matref = self.get_material_link_symbol("target")
+			material_bind[mat_index] = matref
 
-			self.writel(S_GEOM, 3, '<' + prim_type + ' count="' + str(len(surface_v_indices[m])) + '" material="' + matref + '">') # todo material
+			self.writel(S_GEOM, 3, '<' + prim_type + ' count="' + str(len(polygons)) + '" material="' + matref + '">') # todo material
 			if (has_vertex):
 				self.writel(S_GEOM, 4, '<input semantic="VERTEX" source="#' + mesh_id + '-vertices" offset="' + str(vertex_offset) + '"/>')
 			if (has_normals):
@@ -790,30 +796,37 @@ class DaeExporter:
 			if (has_colors):
 				self.writel(S_GEOM, 4, '<input semantic="COLOR" source="#' + mesh_id + '-colors" offset="' + str(color_offset) + '"/>')
 			
-			# vcount list if not triangulating
+			# vcount list if not triangulating, as a triangle always has 3 sides no need for an array of 3s
 			if (not triangulated):
 				int_values = "<vcount>"
-				int_values += " ".join([str(len(p)) for p in surface_v_indices[m]])
+				int_values += " ".join([str(len(p)) for p in polygons])
 				int_values += "</vcount>"
 				self.writel(S_GEOM, 4, int_values)
 				
 			# faces
 			int_values = "<p>"
 
-			polygons = []
+			index_buffer = []
 			indices = [0 for i in range(stride)]
-			for p in range(0, len(surface_v_indices[m])):
-				for i in range(0, len(surface_v_indices[m][p])):
+			for p in range(0, len(polygons)):
+				group_polygons=polygons[p]
+				normal_indices=None
+				uv_indices=None
+				if has_normals:
+					normal_indices= surface_normal_indices[mat_index][p]
+				if has_uv:
+					uv_indices=surface_uv_indices[mat_index][p]
+				for i in range(0, len(polygons[p])):
 					if (has_vertex):
-						indices[vertex_offset] = surface_v_indices[m][p][i]
+						indices[vertex_offset] =group_polygons[i]
 					if (has_normals):
-						indices[normal_offset] = surface_normal_indices[m][p][i]
+						indices[normal_offset] =normal_indices[i]
 					if (has_uv):
-						indices[uv_offset] = surface_uv_indices[m][p][i]
+						indices[uv_offset] = uv_indices[i]
 					if (has_colors):
-						indices[color_offset] = surface_v_indices[m][p][i]
-					polygons.append(list(indices))
-			int_values += " ".join([str(i) for c in polygons for i in c])
+						indices[color_offset] = group_polygons[i]
+					index_buffer.append(indices.copy())
+			int_values += " ".join([str(i) for c in index_buffer for i in c])
 			int_values += "</p>"
 			self.writel(S_GEOM, 4, int_values)
 			self.writel(S_GEOM, 3, '</' + prim_type + '>')
@@ -823,19 +836,13 @@ class DaeExporter:
 			self.writel(S_GEOM, 2, '</mesh>')
 		self.writel(S_GEOM, 1, '</geometry>')
 
+		# Key: material slot index, Value: the link target symbol name
 		return material_bind
 
 	def get_material_link_symbol(self, material):
-		if (material != None):
-			count = self.material_link_symbols.get(material, 0)
-			symbol = material + "-symbol"
-			if (count > 0):
-				symbol += "-" + str(count)
-			self.material_link_symbols[material] = count + 1
-			return symbol
-		else:
-			matref = self.new_id("material-symbol")
-		return matref
+		# The material symbol is a proxy name for when a material is linked to a mesh.
+		# This generates a a unique id for each call, even if the same material passed more than once.
+		return self.get_node_id(material+"-material-symbol")
 	
 	def get_node_id(self, name):
 		count = self.node_names.get(name, 0)
@@ -917,8 +924,8 @@ class DaeExporter:
 			
 		camera_lookup = {}
 		for camera in cameras:
-			camera_id = camera.name + '-camera';
-			camera_lookup[camera.name] = camera_id
+			camera_id = self.get_node_id(camera.name + '-camera');
+			camera_lookup[camera] = camera_id
 			self.export_camera(camera, camera_id)
 			
 		return camera_lookup
@@ -955,8 +962,8 @@ class DaeExporter:
 					
 		light_lookup = {}
 		for light in lights:
-			light_id = light.name + '-light';
-			light_lookup[light.name] = light_id
+			light_id = self.get_node_id(light.name + '-light');
+			light_lookup[light] = light_id
 			self.export_lamp(light, light_id)
 			
 		return light_lookup
@@ -1242,30 +1249,30 @@ class DaeExporter:
 			lookup["Armature_node"] = node
 			self.export_armature_node(node, il, lookup, nodes_lookup)
 		elif (node.data != None):
-			if (node.data.name in lookup["skin_controller"]):
-				skin_id = lookup["skin_controller"][node.data.name][0]
+			if (node.data in lookup["skin_controller"]):
+				skin_id = lookup["skin_controller"][node.data]
 				skin_sid="skin"
 				self.writel(S_NODES, il, '<instance_controller url="#' + skin_id + '" sid="'+skin_sid+'">')
 				if (node.parent != None):
 					self.writel(S_NODES, il + 1, '<skeleton>#' + nodes_lookup[node.parent] + '</skeleton>')
 				self.export_material_bind(node, il, lookup)
 				self.writel(S_NODES, il, "</instance_controller>")
-			elif (node.data.name in lookup["geometry_morphs"]):
-				morph_id = lookup["morph"][node.data.name][0]
+			elif (node.data in lookup["geometry_morphs"]):
+				morph_id = lookup["morph"][node.data][0]
 				morph_sid="morph"
 				self.writel(S_NODES, il, '<instance_controller url="#' + morph_id + '" sid="'+morph_sid+'">')
 				self.export_material_bind(node, il, lookup)
 				self.writel(S_NODES, il, "</instance_controller>")
-			elif (node.data.name in lookup["mesh"]):
-				mesh_id = lookup["mesh"][node.data.name]
+			elif (node.data in lookup["mesh"]):
+				mesh_id = lookup["mesh"][node.data]
 				self.writel(S_NODES, il, '<instance_geometry url="#' + mesh_id + '">')
 				self.export_material_bind(node, il, lookup)
 				self.writel(S_NODES, il, "</instance_geometry>")
-			elif (node.data.name in lookup["camera"]):
-				camera_id = lookup["camera"][node.data.name]
+			elif (node.data in lookup["camera"]):
+				camera_id = lookup["camera"][node.data]
 				self.writel(S_NODES, il, '<instance_camera url="#' + camera_id + '"/>')
-			elif (node.data.name in lookup["light"]):
-				light_id = lookup["light"][node.data.name]
+			elif (node.data in lookup["light"]):
+				light_id = lookup["light"][node.data]
 				self.writel(S_NODES, il, '<instance_light url="#' + light_id + '"/>')
 		
 		for x in node.children:
@@ -1314,16 +1321,24 @@ class DaeExporter:
 		return True
 
 	def export_material_bind(self, node, il, lookup):
-		if (node.data.name in lookup["material_bind"]):
-			self.writel(S_NODES, il + 1, '<bind_material>')
-			self.writel(S_NODES, il + 2, '<technique_common>')
-			material_bind = lookup["material_bind"][node.data.name]
-			for material_name, material_symbol in material_bind.items():
-				if  (material_name in lookup["material"]):
-					material_id = lookup["material"][material_name]
+		if not node.material_slots:
+			return
+		if not len(node.material_slots):
+			return
+		material_bind = lookup["material_bind"].get(node.data,None)
+		if not material_bind:
+			return
+		
+		self.writel(S_NODES, il + 1, '<bind_material>')
+		self.writel(S_NODES, il + 2, '<technique_common>')
+		for material_slot, material_symbol in material_bind.items():
+			material=node.material_slots[material_slot].material
+			if material:
+				material_id = lookup["material"][material]
+				if material_id:
 					self.writel(S_NODES, il + 3, '<instance_material symbol="' + material_symbol + '" target="#' + material_id + '"/>')
-			self.writel(S_NODES, il + 2, '</technique_common>')
-			self.writel(S_NODES, il + 1, '</bind_material>')
+		self.writel(S_NODES, il + 2, '</technique_common>')
+		self.writel(S_NODES, il + 1, '</bind_material>')
 
 	def export_materials(self):
 
@@ -1369,26 +1384,27 @@ class DaeExporter:
 			
 		image_lookup = {}
 		for image in images:
-			image_id = image.name + "-image"
-			image_lookup[image.name] = image_id
-			self.export_image(image, image_id)
+			if image.has_data:
+				image_id = self.get_node_id(image.name + "-image")
+				image_lookup[image] = image_id
+				self.export_image(image, image_id)
 				
 		
 		# export library_effects content
 		
 		effect_lookup = {}				
 		for mat in materials:
-			effect_id = mat.name + "-effect"
-			effect_lookup[mat.name] = effect_id
+			effect_id = self.get_node_id(mat.name + "-effect")
+			effect_lookup[mat] = effect_id
 			self.export_effect(mat, effect_id, image_lookup)
 		
 		# export library_materials content
 		
 		material_lookup = {}
 		for mat in materials:
-			material_id = mat.name + "-material"
-			material_lookup[mat.name] = material_id
-			self.export_material(mat, material_id, effect_lookup[mat.name])
+			material_id = self.get_node_id(mat.name + "-material")
+			material_lookup[mat] = material_id
+			self.export_material(mat, material_id, effect_lookup[mat])
 			
 		return material_lookup
 			
@@ -1417,9 +1433,9 @@ class DaeExporter:
 		physics_materials_lookup = {}
 		self.writel(S_P_MATS, 0, '<library_physics_materials>')
 		for node in collision_nodes:
-			if (not node.data.name in physics_materials_lookup):
-				physics_material_id = node.data.name + '-phys_mat'
-				physics_materials_lookup[node.data.name] = physics_material_id
+			if (not node.data in physics_materials_lookup):
+				physics_material_id = self.get_node_id(node.data.name + '-phys_mat')
+				physics_materials_lookup[node.data] = physics_material_id
 				self.export_physics_material(node, physics_material_id)
 		self.writel(S_P_MATS, 0, '</library_physics_materials>')
 		return physics_materials_lookup
@@ -1441,9 +1457,9 @@ class DaeExporter:
 		physics_model_lookup = {}
 		self.writel(S_P_MODEL, 0, '<library_physics_models>')
 		for node in collision_shape_nodes:
-			if (not node.data.name in physics_model_lookup):
-				physics_model_id = node.data.name + '-model'
-				physics_model_lookup[node.data.name] = physics_model_id
+			if (not node.data in physics_model_lookup):
+				physics_model_id = self.get_node_id(node.data.name + '-model')
+				physics_model_lookup[node.data] = physics_model_id
 				self.export_physics_model(node, physics_model_id, lookup)
 		self.writel(S_P_MODEL, 0, '</library_physics_models>')
 		return physics_model_lookup
@@ -1460,7 +1476,7 @@ class DaeExporter:
 		self.writel(S_P_MODEL, 4, '</mass_frame>')
 		self.writel(S_P_MODEL, 4, '<shape>')
 		try: # in case no physics material in the lookup
-			self.writel(S_P_MODEL, 5, '<instance_physics_material url="#{}"/>'.format(lookup['physics_material'][node.data.name]))
+			self.writel(S_P_MODEL, 5, '<instance_physics_material url="#{}"/>'.format(lookup['physics_material'][node.data]))
 		except:
 			pass # don't need it then
 		shape_funcs = {
@@ -1554,7 +1570,7 @@ class DaeExporter:
 		# get the source for building a physics mesh based on the mesh_source setting
 		try:
 			if (self.node_has_convex_hull(node)):
-				return True, lookup['convex_mesh'][node.data.name]
+				return True, lookup['convex_mesh'][node.data]
 			else:
 				return False, lookup['nodes'][node]
 		except:
@@ -1644,7 +1660,7 @@ class DaeExporter:
 			anim_id = target + "-anim"
 		else:
 			anim_id = action_name + "-" + target + "-anim"
-		anim_id=anim_id.replace("/","-")
+		anim_id=self.get_node_id(anim_id.replace("/","-"))
 		
 		self.writel(S_ANIM, 1, '<animation id="' + anim_id + '">')
 
@@ -1800,8 +1816,8 @@ class DaeExporter:
 
 				if (not node in self.valid_nodes):
 					continue
-				if (node.data and (node.data.name in lookup["morph"])):
-					morph_controller = lookup["morph"][node.data.name]
+				if (node.data and (node.data in lookup["morph"])):
+					morph_controller = lookup["morph"][node.data]
 					morph_id=morph_controller[0]
 					targets=morph_controller[1]
 					for i in range(1,len(node.data.shape_keys.key_blocks)):
@@ -1818,21 +1834,21 @@ class DaeExporter:
 
 					for bone in node.data.bones:
 
-						bone_name = self.skeleton_info[node]["bone_ids"].get(bone, None)
-						if (bone_name is None or not self.skeleton_info[node]["has_transform"][bone]):
+						bone_node_id = self.skeleton_info[node]["bone_ids"].get(bone, None)
+						if (bone_node_id is None or not self.skeleton_info[node]["has_transform"][bone]):
 							continue
 
 						posebone = node.pose.bones[bone.name]
 						transform = self.get_posebone_transform(node.pose.bones, posebone)
-						if (not (bone_name in xform_cache)):
-							xform_cache[bone_name] = []
-						self.append_keyframe_if_different(xform_cache[bone_name],transform,key)
+						if (not (bone_node_id in xform_cache)):
+							xform_cache[bone_node_id] = []
+						self.append_keyframe_if_different(xform_cache[bone_node_id],transform,key)
 
-				name = node.name
 				transform = self.get_node_local_transform(node)
-				if (not (name in xform_cache)):
-					xform_cache[name] = []
-				self.append_keyframe_if_different(xform_cache[name],transform,key)
+				node_id = lookup["nodes"][node]
+				if (not (node_id in xform_cache)):
+					xform_cache[node_id] = []
+				self.append_keyframe_if_different(xform_cache[node_id],transform,key)
 
 		self.scene.frame_set(frame_orig)
 
@@ -1939,10 +1955,10 @@ class DaeExporter:
 	def export_timeline(self, action_name,start,end,lookup):
 		xform_cache, blend_cache = self.get_animation_transforms(start,end, lookup)
 		tcn = []
-		for nid,cache in xform_cache.items():
-			tcn.append(self.export_animation_xforms(nid, action_name, cache))
-		for nid,cache in blend_cache.items():
-			tcn.append(self.export_animation_blends(nid, action_name, cache))
+		for node_id,cache in xform_cache.items():
+			tcn.append(self.export_animation_xforms(node_id, action_name, cache))
+		for target_id,cache in blend_cache.items():
+			tcn.append(self.export_animation_blends(target_id, action_name, cache))
 		self.export_animation_clip(action_name, start,end, tcn)
 
 	def unmute_NLA_object(self,node):
@@ -1996,7 +2012,7 @@ class DaeExporter:
 					self.mute_NLA(nla)
 					self.unmute_NLA_object(node)
 					start,end = self.get_NLA_object_timeline(node)
-					self.export_timeline(node.name,start,end,lookup)
+					self.export_timeline(self.get_node_id(node.name),start,end,lookup)
 			
 			if self.config["clip_type"]=='TRACK':
 				for tracks in nla.values():
@@ -2004,7 +2020,7 @@ class DaeExporter:
 						self.mute_NLA(nla)
 						self.unmute_NLA_track(track[0])
 						start,end = self.get_NLA_track_timeline(track[0])
-						self.export_timeline(track[0].name,start,end,lookup)
+						self.export_timeline(self.get_node_id(track[0].name),start,end,lookup)
 						
 			if self.config["clip_type"]=='STRIP':
 				for tracks in nla.values():
@@ -2013,7 +2029,7 @@ class DaeExporter:
 							strip[0].mute=False
 							start =int(strip[0].frame_start)
 							end = int(strip[0].frame_end)
-							self.export_timeline(strip[0].name,start,end,lookup)
+							self.export_timeline(self.get_node_id(strip[0].name),start,end,lookup)
 							strip[0].mute=True
 			
 			
