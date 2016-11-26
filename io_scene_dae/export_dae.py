@@ -45,17 +45,6 @@ This script is an exporter to the Khronos Collada file format.
 http://www.khronos.org/collada/
 """
 
-# TODO:
-# Materials & Textures
-# Optionally export Vertex Colors
-# Morph Targets
-# Control bone removal
-# Copy textures
-# Export Keyframe Optimization
-# --
-# Morph Targets
-# Blender native material? (?)
-
 # according to collada spec, order matters
 S_ASSET = 0
 S_IMGS = 1
@@ -74,7 +63,7 @@ S_P_SCENE = 13
 S_ANIM = 14
 S_ANIM_CLIPS = 15
 
-CMP_EPSILON = 0.0001
+CMP_EPSILON = 0.01
 
 def strmtx(mtx):
 	return " ".join([str(e) for v in mtx for e in v])
@@ -296,7 +285,7 @@ class DaeExporter:
 
 		mesh.calc_normals_split();
 		
-		# force triangulation of the mesh has polygons with more than 4 sides
+		# force triangulation if the mesh has polygons with more than 4 sides
 		force_triangluation = False
 		for polygon in mesh.polygons:
 			if (polygon.loop_total > 4):
@@ -383,8 +372,8 @@ class DaeExporter:
 			colors = [c.color for c in mesh.vertex_colors.active.data.values()]
 			
 		#vertices = array of xyz point tuples
-		#normals = array of xyz vector tuples associated with vertices array
-		#uv = array of uv point tuples associated with vertices array
+		#normals = array of xyz vector tuples 
+		#uv = array of uv point tuples
 		# colors = array of r,g,b color tuples associated with vertices array
 		#surface_v_indices = Key: is the material slot index for the group of polygons, Values: is a list of integer vertex indices (into vertices array)
 		#surface_normal_indices =  Key: is the material slot index for the group of polygons,Values: is a list of integer normal indices (into normals array)
@@ -521,14 +510,19 @@ class DaeExporter:
 
 		if (mesh.shape_keys != None and len(mesh.shape_keys.key_blocks)):
 			values = []
-			morph_targets = []
+			# save weight values for restoration after being monkeyed with
+			
 			for k in range(1, len(mesh.shape_keys.key_blocks)):
 				shape = node.data.shape_keys.key_blocks[k]
-				values += [shape.value] # save value
+				values += [shape.value] 
 				shape.value = 0
 			
 			scene_show_only_shape_key = node.show_only_shape_key
 			scene_active_shape_key = node.active_shape_key_index 
+			
+			morph_targets = []
+			
+			# pose the mesh using each shape key and export a mesh for each
 			
 			for k in range(1, len(mesh.shape_keys.key_blocks)):
 				shape = node.data.shape_keys.key_blocks[k]
@@ -546,7 +540,7 @@ class DaeExporter:
 			node.active_shape_key_index = scene_active_shape_key
 			mesh.update
 			
-			# morph_targets = [id of morph shape mesh, the shape key index corrected to remove the basis (shape key 1 is index 0)
+			# morph_targets = [id of morph shape mesh, the shape key index corrected to remove the basis (shape key 1 is index 0)]
 			return morph_targets
 		else:	
 			return None;
@@ -1384,10 +1378,9 @@ class DaeExporter:
 			
 		image_lookup = {}
 		for image in images:
-			if image.has_data:
-				image_id = self.get_node_id(image.name + "-image")
-				image_lookup[image] = image_id
-				self.export_image(image, image_id)
+			image_id = self.get_node_id(image.name + "-image")
+			image_lookup[image] = image_id
+			self.export_image(image, image_id)
 				
 		
 		# export library_effects content
