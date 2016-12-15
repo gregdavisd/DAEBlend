@@ -24,7 +24,7 @@ import math # math.pi
 import shutil
 import bpy
 import bmesh
-from mathutils import Vector, Matrix, Euler
+from mathutils import Vector, Matrix, Euler, Color
 import itertools
 from statistics import mean
 import sys
@@ -143,7 +143,10 @@ class DaeExporter:
 				dstfile = basedir + "/" + os.path.basename(image.filepath)
 
 				#if (not os.path.isfile(dstfile)):
-				image.save()
+				try:
+					image.save()
+				except:
+					pass
 
 				imgpath = "images/" + os.path.basename(image.filepath)
 				image.filepath = img_tmp_path
@@ -331,17 +334,17 @@ class DaeExporter:
 		# v[0] is loop index, v[1] is the vertex 
 		surface_v_indices = {g:s for (g, s) in 
 							zip(loop_vertices.keys(),
-										[[[v[1].vertex_index for v in p] for p in g] for g in loop_vertices.values()])}
+										[[[v.vertex_index for v in p] for p in g] for g in loop_vertices.values()])}
 		
 		# convert dictionary of loop vertices to a flat list of normals, removing duplicates
-		normals = list(set([v[1].normal.freeze() for g in loop_vertices.values() for s in g for v in s]))
+		normals = list(set([v.normal.freeze() for g in loop_vertices.values() for s in g for v in s]))
 		
 		if (not ((len(normals) == 1) and (normals[0].length < 0.1))):
 			normals_map = {k:v for (v, k) in enumerate(normals)}
 			# convert dictionary of loop vertices to a dictionary of normal indices
 			surface_normal_indices = {g:s for (g, s) in 
 								zip(loop_vertices.keys(),
-											[[[normals_map[v[1].normal.freeze()] for v in p] for p in g] for g in loop_vertices.values()])}
+											[[[normals_map[v.normal.freeze()] for v in p] for p in g] for g in loop_vertices.values()])}
 		else:
 			# if no normals on the mesh then the normals list will be just one zero vector
 			normals = []
@@ -364,12 +367,21 @@ class DaeExporter:
 			# convert dictionary of loop vertices into a dictionary of uv indices (into the uv list)
 			surface_uv_indices = {g:s for (g, s) in 
 							zip(loop_vertices.keys(),
-										[[[uv_map[uv_layer[v[0]].uv.freeze()] for v in p] for p in g] for g in loop_vertices.values()])}
+										[[[uv_map[uv_layer[v.index].uv.freeze()] for v in p] for p in g] for g in loop_vertices.values()])}
 
-		# colors are aligned with vertices
-		colors = []
+
 		if (mesh.vertex_colors):
-			colors = [c.color for c in mesh.vertex_colors.active.data.values()]
+			# Blender doesn't have colors per vertex instead color per polygon loop vertex. 
+			# So guess vertex colors by averaging every color used for each vertex.
+			# colors are aligned with vertices
+			color_buckets =[[0,Vector((0,0,0))] for i in range(len(vertices))]
+			for loop_vertex in [v for g in loop_vertices.values() for p in g for v in p]:
+				color_buckets[loop_vertex.vertex_index][0]+=1
+				color_buckets[loop_vertex.vertex_index][1]+=Vector(mesh.vertex_colors.active.data[loop_vertex.index].color)
+				
+			colors=[Color(color/count) for (count,color) in color_buckets]
+		else:
+			colors=[]
 			
 		#vertices = array of xyz point tuples
 		#normals = array of xyz vector tuples 
@@ -402,12 +414,11 @@ class DaeExporter:
 			for lt in range(f.loop_total):
 				loop_index = f.loop_start + lt
 				ml = mesh.loops[loop_index]
-				polygon.append([loop_index, ml])
+				polygon.append(ml)
 				
 			loop_vertices.append(polygon)
 		
-		#vertices[material index][polygons][loop index, MeshLoop]
-		# i.e. [smoothing group][polygons][loop index,vertex]
+		#vertices[material index][polygons][MeshLoop]
 		
 		return	vertices
 
@@ -681,7 +692,7 @@ class DaeExporter:
 		has_vertex = len(vertices)>0	
 		has_normals = len(normals) > 0
 		has_uv = len(uv) > 0	
-		has_colors = len(colors) > 0
+		has_colors = has_vertex and len(colors) > 0
 		
 		self.writel(S_GEOM, 1, '<geometry id="' + mesh_id + '" name="' + mesh_name + '">')
 		if (convex):
@@ -768,8 +779,7 @@ class DaeExporter:
 			uv_offset = offset
 			offset += 1
 		if (has_colors):
-			color_offset = offset
-			offset += 1
+			color_offset = vertex_offset
 		stride = offset
 		
 		material_bind = {}
@@ -817,8 +827,8 @@ class DaeExporter:
 						indices[normal_offset] =normal_indices[i]
 					if (has_uv):
 						indices[uv_offset] = uv_indices[i]
-					if (has_colors):
-						indices[color_offset] = group_polygons[i]
+					#if (has_colors):
+					#	indices[color_offset] = group_polygons[i]
 					index_buffer.append(indices.copy())
 			int_values += " ".join([str(i) for c in index_buffer for i in c])
 			int_values += "</p>"
