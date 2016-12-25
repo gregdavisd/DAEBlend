@@ -1163,6 +1163,11 @@ class DaeExporter:
 			else:
 				matrix = node.matrix_local.copy()
 		
+		if (node.type=='CAMERA'):
+			m=Matrix.Rotation(-math.pi/2.0, 4, Vector((1,0,0)))
+			matrix =matrix*m
+
+			
 		if (self.transform_matrix_scale):
 			matrix,scale=self.split_matrix_scale(matrix)
 			return {"matrix":matrix, "scale":scale}
@@ -1203,15 +1208,7 @@ class DaeExporter:
 			parent_bone = self.get_bone_deform_parent(posebone.bone)
 			if (parent_bone):
 				parent = posebones_map[parent_bone.name]
-				parent_invisible = False
-	
-				for i in range(3):
-					if (parent.scale[i] == 0.0):
-						parent_invisible = True
-						break
-	
-				if (not parent_invisible):
-					matrix = parent.matrix.inverted() * matrix
+				matrix = parent.matrix.inverted() * matrix
 				
 		if (self.transform_matrix_scale):
 			matrix,scale=self.split_matrix_scale(matrix)
