@@ -290,10 +290,11 @@ class DaeExporter:
 		
 		# force triangulation if the mesh has polygons with more than 4 sides
 		force_triangluation = False
-		for polygon in mesh.polygons:
-			if (polygon.loop_total > 4):
-				force_triangluation = True
-				break
+		if not triangulate:
+			for polygon in mesh.polygons:
+				if (polygon.loop_total > 4):
+					force_triangluation = True
+					break
 		
 		if (triangulate or force_triangluation):
 			bm = bmesh.new()
@@ -1121,13 +1122,6 @@ class DaeExporter:
 			
 		return [e for t in transforms for e in t]
 
-	def inverted_scale_matrix(self, vector):
-		matrix = Matrix.Identity(3)
-		matrix[0][0] = 1.0 / vector[0]
-		matrix[1][1] = 1.0 / vector[1]
-		matrix[2][2] = 1.0 / vector[2]
-		return matrix
-
 	def get_node_bone_parenting(self,node):
 		scan_node=node
 		while (scan_node.parent):
@@ -1158,10 +1152,7 @@ class DaeExporter:
 				matrix = parent.matrix.inverted() * (armature.matrix_world.inverted() * node.matrix_world)
 			
 		else:
-			if (node.parent):
-				matrix= node.parent.matrix_world.inverted() * node.matrix_world
-			else:
-				matrix = node.matrix_local.copy()
+			matrix = node.matrix_local.copy()
 		
 		if (node.type=='CAMERA'):
 			m=Matrix.Rotation(-math.pi/2.0, 4, Vector((1,0,0)))
