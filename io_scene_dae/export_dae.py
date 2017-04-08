@@ -20,7 +20,7 @@ from platform import node
 from mesh_inset.offset import Offset
 import os
 import time
-import math # math.pi
+import math  # math.pi
 import shutil
 import bpy
 import bmesh
@@ -68,15 +68,15 @@ CMP_EPSILON = 0.01
 def strmtx(mtx):
 	return " ".join([str(e) for v in mtx for e in v])
 
-def matrix_equal(a,b):
-	for aa,bb in zip([e for v in a for e in v],[e for v in b for e in v]):
-		if (abs(aa-bb)>CMP_EPSILON):
+def matrix_equal(a, b):
+	for aa, bb in zip([e for v in a for e in v], [e for v in b for e in v]):
+		if (abs(aa - bb) > CMP_EPSILON):
 			return False
 	return True
 
-def vector_equal(a,b):
-	for aa,bb in zip([e for e in a],[e for e in b]):
-		if (abs(aa-bb)>CMP_EPSILON):
+def vector_equal(a, b):
+	for aa, bb in zip([e for e in a], [e for e in b]):
+		if (abs(aa - bb) > CMP_EPSILON):
 			return False
 	return True
 			
@@ -129,7 +129,7 @@ class DaeExporter:
 				os.makedirs(basedir)
 			if os.path.isfile(imgpath):
 				dstfile = basedir + "/" + os.path.basename(imgpath)
-				#if (not os.path.isfile(dstfile)):
+				# if (not os.path.isfile(dstfile)):
 				shutil.copy(imgpath, dstfile)
 				imgpath = "images/" + os.path.basename(imgpath)
 			else:
@@ -142,7 +142,7 @@ class DaeExporter:
 
 				dstfile = basedir + "/" + os.path.basename(image.filepath)
 
-				#if (not os.path.isfile(dstfile)):
+				# if (not os.path.isfile(dstfile)):
 				try:
 					image.save()
 				except:
@@ -153,10 +153,10 @@ class DaeExporter:
 		else:
 			# export relative, always, no one wants absolute paths.
 			try:
-				imgpath = os.path.relpath(imgpath, os.path.dirname(self.path)).replace("\\", "/") # export unix compatible always
+				imgpath = os.path.relpath(imgpath, os.path.dirname(self.path)).replace("\\", "/")  # export unix compatible always
 
 			except:
-				pass # fails sometimes, not sure why
+				pass  # fails sometimes, not sure why
 
 		self.writel(S_IMGS, 1, '<image id="' + image_id + '" name="' + image.name + '">')
 		
@@ -176,7 +176,7 @@ class DaeExporter:
 		specular_tex = None
 		emission_tex = None
 		normal_tex = None
-		ambient_tex=None
+		ambient_tex = None
 		done_images = set()
 		
 		for i in range(len(material.texture_slots)):
@@ -191,7 +191,7 @@ class DaeExporter:
 				continue
 
 			# image
-			imgid = image_lookup.get(ts.texture.image,None)
+			imgid = image_lookup.get(ts.texture.image, None)
 			if (not imgid):
 				continue
 			if (imgid in done_images):
@@ -227,7 +227,7 @@ class DaeExporter:
 		if (emission_tex != None):
 			self.writel(S_FX, 6, '<texture texture="' + emission_tex + '/>')
 		else:
-			self.writel(S_FX, 6, '<color>' + numarr_alpha(material.diffuse_color, material.emit) + ' </color>') # not totally right but good enough
+			self.writel(S_FX, 6, '<color>' + numarr_alpha(material.diffuse_color, material.emit) + ' </color>')  # not totally right but good enough
 		self.writel(S_FX, 5, '</emission>')
 		self.writel(S_FX, 5, '<ambient>')
 		if (ambient_tex != None):
@@ -276,7 +276,7 @@ class DaeExporter:
 	
 			# get a mesh for this node
 		try:
-			mesh = node.to_mesh(self.scene, apply_modifiers, "RENDER") # is this allright?
+			mesh = node.to_mesh(self.scene, apply_modifiers, "RENDER")  # is this allright?
 		except:
 			return None
 				
@@ -286,7 +286,7 @@ class DaeExporter:
 				bpy.data.meshes.remove(mesh)
 			return False
 
-		mesh.calc_normals_split();
+		# mesh.calc_normals_split();
 		
 		# force triangulation if the mesh has polygons with more than 4 sides
 		force_triangluation = False
@@ -302,7 +302,7 @@ class DaeExporter:
 			bmesh.ops.triangulate(bm, faces=bm.faces)
 			bm.to_mesh(mesh)
 			bm.free()
-			mesh.calc_normals_split();
+			# mesh.calc_normals_split();
 			mesh.update(calc_tessface=True)
 		
 		if (mesh != node.data):
@@ -329,7 +329,7 @@ class DaeExporter:
 		vertices = [Vector(v.co) for v in mesh.vertices.values()]
 
 		# get polygons
-		loop_vertices  = self.get_polygon_groups(mesh)
+		loop_vertices = self.get_polygon_groups(mesh)
 
 		# convert dictionary of loop vertices to dictionary of vertex indices
 		# v[0] is loop index, v[1] is the vertex 
@@ -338,14 +338,13 @@ class DaeExporter:
 										[[[v.vertex_index for v in p] for p in g] for g in loop_vertices.values()])}
 		
 		# convert dictionary of loop vertices to a flat list of normals, removing duplicates
-		normals = list(set([v.normal.freeze() for g in loop_vertices.values() for s in g for v in s]))
+		normals = list(set([v.normal.freeze() for v in mesh.vertices.values()]))
 		
 		if (not ((len(normals) == 1) and (normals[0].length < 0.1))):
 			normals_map = {k:v for (v, k) in enumerate(normals)}
 			# convert dictionary of loop vertices to a dictionary of normal indices
 			surface_normal_indices = {g:s for (g, s) in 
-								zip(loop_vertices.keys(),
-											[[[normals_map[v.normal.freeze()] for v in p] for p in g] for g in loop_vertices.values()])}
+									zip(loop_vertices.keys(), [[[normals_map[mesh.vertices[v.vertex_index].normal.freeze()] for v in p] for p in g] for g in loop_vertices.values()])}
 		else:
 			# if no normals on the mesh then the normals list will be just one zero vector
 			normals = []
@@ -375,22 +374,22 @@ class DaeExporter:
 			# Blender doesn't have colors per vertex instead color per polygon loop vertex. 
 			# So guess vertex colors by averaging every color used for each vertex.
 			# colors are aligned with vertices
-			color_buckets =[[0,Vector((0,0,0))] for i in range(len(vertices))]
+			color_buckets = [[0, Vector((0, 0, 0))] for i in range(len(vertices))]
 			for loop_vertex in [v for g in loop_vertices.values() for p in g for v in p]:
-				color_buckets[loop_vertex.vertex_index][0]+=1
-				color_buckets[loop_vertex.vertex_index][1]+=Vector(mesh.vertex_colors.active.data[loop_vertex.index].color)
+				color_buckets[loop_vertex.vertex_index][0] += 1
+				color_buckets[loop_vertex.vertex_index][1] += Vector(mesh.vertex_colors.active.data[loop_vertex.index].color)
 				
-			colors=[Color(color/count) for (count,color) in color_buckets]
+			colors = [Color(color / count) for (count, color) in color_buckets]
 		else:
-			colors=[]
+			colors = []
 			
-		#vertices = array of xyz point tuples
-		#normals = array of xyz vector tuples 
-		#uv = array of uv point tuples
+		# vertices = array of xyz point tuples
+		# normals = array of xyz vector tuples 
+		# uv = array of uv point tuples
 		# colors = array of r,g,b color tuples associated with vertices array
-		#surface_v_indices = Key: is the material slot index for the group of polygons, Values: is a list of integer vertex indices (into vertices array)
-		#surface_normal_indices =  Key: is the material slot index for the group of polygons,Values: is a list of integer normal indices (into normals array)
-		#surface_uv_indices = Key: is the material slot index for the group of polygons,Values: is a list of integer uv indices (into uv array)
+		# surface_v_indices = Key: is the material slot index for the group of polygons, Values: is a list of integer vertex indices (into vertices array)
+		# surface_normal_indices =  Key: is the material slot index for the group of polygons,Values: is a list of integer normal indices (into normals array)
+		# surface_uv_indices = Key: is the material slot index for the group of polygons,Values: is a list of integer uv indices (into uv array)
 		return vertices, normals, uv, colors, surface_v_indices, surface_normal_indices, surface_uv_indices
 	
 	def get_polygon_groups(self, mesh):
@@ -419,7 +418,7 @@ class DaeExporter:
 				
 			loop_vertices.append(polygon)
 		
-		#vertices[material index][polygons][MeshLoop]
+		# vertices[material index][polygons][MeshLoop]
 		
 		return	vertices
 
@@ -542,11 +541,11 @@ class DaeExporter:
 				node.active_shape_key_index = k
 				shape.value = 1.0
 				mesh.update()
-				morph_id = self.get_node_id(mesh_id + "-morph-"+shape.name)
-				morph_targets.append([morph_id,values[k-1]])
+				morph_id = self.get_node_id(mesh_id + "-morph-" + shape.name)
+				morph_targets.append([morph_id, values[k - 1]])
 				export_mesh = self.node_to_mesh(node, triangulate)
 				self.export_mesh(export_mesh, morph_id, morph_id, triangulate)
-				shape.value = values[k-1]
+				shape.value = values[k - 1]
 			
 			node.show_only_shape_key = scene_show_only_shape_key
 			node.active_shape_key_index = scene_active_shape_key
@@ -561,7 +560,7 @@ class DaeExporter:
 		morph_lookup = {}
 		for mesh, targets in geometry_morphs.items():
 			morph_id = self.get_node_id(mesh.name + "-morph")
-			morph_lookup[mesh] = [morph_id,targets]
+			morph_lookup[mesh] = [morph_id, targets]
 			mesh_id = mesh_lookup[mesh]
 			self.export_morph_controller(mesh_id, targets, morph_id)
 		return morph_lookup
@@ -690,7 +689,7 @@ class DaeExporter:
 
 		vertices, normals, uv, colors, surface_v_indices, surface_normal_indices, surface_uv_indices = self.get_mesh_surfaces(mesh)
 		
-		has_vertex = len(vertices)>0	
+		has_vertex = len(vertices) > 0	
 		has_normals = len(normals) > 0
 		has_uv = len(uv) > 0	
 		has_colors = has_vertex and len(colors) > 0
@@ -785,13 +784,13 @@ class DaeExporter:
 		
 		material_bind = {}
 		
-		for mat_index,polygons in surface_v_indices.items():
+		for mat_index, polygons in surface_v_indices.items():
 			
 			# Every renderable mesh must have a material symbol even if no material is assigned in Blender.
 			matref = self.get_material_link_symbol("target")
 			material_bind[mat_index] = matref
 
-			self.writel(S_GEOM, 3, '<' + prim_type + ' count="' + str(len(polygons)) + '" material="' + matref + '">') # todo material
+			self.writel(S_GEOM, 3, '<' + prim_type + ' count="' + str(len(polygons)) + '" material="' + matref + '">')  # todo material
 			if (has_vertex):
 				self.writel(S_GEOM, 4, '<input semantic="VERTEX" source="#' + mesh_id + '-vertices" offset="' + str(vertex_offset) + '"/>')
 			if (has_normals):
@@ -814,22 +813,22 @@ class DaeExporter:
 			index_buffer = []
 			indices = [0 for i in range(stride)]
 			for p in range(0, len(polygons)):
-				group_polygons=polygons[p]
-				normal_indices=None
-				uv_indices=None
+				group_polygons = polygons[p]
+				normal_indices = None
+				uv_indices = None
 				if has_normals:
-					normal_indices= surface_normal_indices[mat_index][p]
+					normal_indices = surface_normal_indices[mat_index][p]
 				if has_uv:
-					uv_indices=surface_uv_indices[mat_index][p]
+					uv_indices = surface_uv_indices[mat_index][p]
 				for i in range(0, len(polygons[p])):
 					if (has_vertex):
-						indices[vertex_offset] =group_polygons[i]
+						indices[vertex_offset] = group_polygons[i]
 					if (has_normals):
-						indices[normal_offset] =normal_indices[i]
+						indices[normal_offset] = normal_indices[i]
 					if (has_uv):
 						indices[uv_offset] = uv_indices[i]
-					#if (has_colors):
-					#	indices[color_offset] = group_polygons[i]
+					# if (has_colors):
+					# 	indices[color_offset] = group_polygons[i]
 					index_buffer.append(indices.copy())
 			int_values += " ".join([str(i) for c in index_buffer for i in c])
 			int_values += "</p>"
@@ -847,7 +846,7 @@ class DaeExporter:
 	def get_material_link_symbol(self, material):
 		# The material symbol is a proxy name for when a material is linked to a mesh.
 		# This generates a a unique id for each call, even if the same material passed more than once.
-		return self.get_node_id(material+"-material-symbol")
+		return self.get_node_id(material + "-material-symbol")
 	
 	def get_node_id(self, name):
 		count = self.node_names.get(name, 0)
@@ -942,14 +941,14 @@ class DaeExporter:
 		self.writel(S_CAMS, 3, '<technique_common>')
 		if (camera.type == "PERSP"):
 			self.writel(S_CAMS, 4, '<perspective>')
-			self.writel(S_CAMS, 5, '<yfov> ' + str(math.degrees(camera.angle)) + ' </yfov>') # I think?
+			self.writel(S_CAMS, 5, '<yfov> ' + str(math.degrees(camera.angle)) + ' </yfov>')  # I think?
 			self.writel(S_CAMS, 5, '<aspect_ratio> ' + str(self.scene.render.resolution_x / self.scene.render.resolution_y) + ' </aspect_ratio>')
 			self.writel(S_CAMS, 5, '<znear> ' + str(camera.clip_start) + ' </znear>')
 			self.writel(S_CAMS, 5, '<zfar> ' + str(camera.clip_end) + ' </zfar>')
 			self.writel(S_CAMS, 4, '</perspective>')
 		else:
 			self.writel(S_CAMS, 4, '<orthographic>')
-			self.writel(S_CAMS, 5, '<xmag> ' + str(camera.ortho_scale * 0.5) + ' </xmag>') # I think?
+			self.writel(S_CAMS, 5, '<xmag> ' + str(camera.ortho_scale * 0.5) + ' </xmag>')  # I think?
 			self.writel(S_CAMS, 5, '<aspect_ratio> ' + str(self.scene.render.resolution_x / self.scene.render.resolution_y) + ' </aspect_ratio>')
 			self.writel(S_CAMS, 5, '<znear> ' + str(camera.clip_start) + ' </znear>')
 			self.writel(S_CAMS, 5, '<zfar> ' + str(camera.clip_end) + ' </zfar>')
@@ -982,7 +981,7 @@ class DaeExporter:
 		if (light.type == "POINT"):
 			self.writel(S_LAMPS, 4, '<point>')
 			self.writel(S_LAMPS, 5, '<color>' + strarr(light.color) + '</color>')
-			att_by_distance = 2.0 / light.distance # convert to linear attenuation
+			att_by_distance = 2.0 / light.distance  # convert to linear attenuation
 			self.writel(S_LAMPS, 5, '<linear_attenuation>' + str(att_by_distance) + '</linear_attenuation>')
 			if (light.use_sphere):
 				self.writel(S_LAMPS, 5, '<zfar>' + str(light.distance) + '</zfar>')
@@ -990,11 +989,11 @@ class DaeExporter:
 		elif (light.type == "SPOT"):
 			self.writel(S_LAMPS, 4, '<spot>')
 			self.writel(S_LAMPS, 5, '<color>' + strarr(light.color) + '</color>')
-			att_by_distance = 2.0 / light.distance # convert to linear attenuation
+			att_by_distance = 2.0 / light.distance  # convert to linear attenuation
 			self.writel(S_LAMPS, 5, '<linear_attenuation>' + str(att_by_distance) + '</linear_attenuation>')
 			self.writel(S_LAMPS, 5, '<falloff_angle>' + str(math.degrees(light.spot_size / 2)) + '</falloff_angle>')
 			self.writel(S_LAMPS, 4, '</spot>')
-		else: # write a sun lamp for everything else (not supported)
+		else:  # write a sun lamp for everything else (not supported)
 			self.writel(S_LAMPS, 4, '<directional>')
 			self.writel(S_LAMPS, 5, '<color>' + strarr(light.color) + '</color>')
 			self.writel(S_LAMPS, 4, '</directional>')
@@ -1122,19 +1121,19 @@ class DaeExporter:
 			
 		return [e for t in transforms for e in t]
 
-	def get_node_bone_parenting(self,node):
-		scan_node=node
+	def get_node_bone_parenting(self, node):
+		scan_node = node
 		while (scan_node.parent):
 			if (scan_node.parent_type == 'BONE'):
 				armature = scan_node.parent
 				if (armature.data.bones[scan_node.parent_bone].use_deform):
 					parent_bone = armature.pose.bones[scan_node.parent_bone]
-					return armature,parent_bone
+					return armature, parent_bone
 				else:
-					scan_node=scan_node.parent
+					scan_node = scan_node.parent
 			else:
-				scan_node=scan_node.parent
-		return None,None
+				scan_node = scan_node.parent
+		return None, None
 		
 	def get_node_local_transform(self, node):
 		if (node.parent_type == 'BONE'):
@@ -1146,21 +1145,21 @@ class DaeExporter:
 				parent = self.get_bone_deform_parent(parent_bone)
 			if (not parent):
 				parent = armature
-				matrix=node.matrix_local.copy()
+				matrix = node.matrix_local.copy()
 			else:
-				parent=armature.pose.bones[node.parent_bone]
+				parent = armature.pose.bones[node.parent_bone]
 				matrix = parent.matrix.inverted() * (armature.matrix_world.inverted() * node.matrix_world)
 			
 		else:
 			matrix = node.matrix_local.copy()
 		
-		if (node.type=='CAMERA'):
-			m=Matrix.Rotation(-math.pi/2.0, 4, Vector((1,0,0)))
-			matrix =matrix*m
+		if (node.type == 'CAMERA'):
+			m = Matrix.Rotation(-math.pi / 2.0, 4, Vector((1, 0, 0)))
+			matrix = matrix * m
 
 			
 		if (self.transform_matrix_scale):
-			matrix,scale=self.split_matrix_scale(matrix)
+			matrix, scale = self.split_matrix_scale(matrix)
 			return {"matrix":matrix, "scale":scale}
 		else:
 			return {"matrix":matrix}
@@ -1173,9 +1172,9 @@ class DaeExporter:
 			parent = parent.parent
 		return parent
 	
-	def split_matrix_scale(self,matrix):
+	def split_matrix_scale(self, matrix):
 		m = matrix.normalized()
-		m.translation=matrix.to_translation()
+		m.translation = matrix.to_translation()
 		return m, matrix.to_scale()
 	
 	def get_bone_transform(self, bone):
@@ -1202,7 +1201,7 @@ class DaeExporter:
 				matrix = parent.matrix.inverted() * matrix
 				
 		if (self.transform_matrix_scale):
-			matrix,scale=self.split_matrix_scale(matrix)
+			matrix, scale = self.split_matrix_scale(matrix)
 			return {"matrix":matrix, "scale":scale}
 		else:
 			return {"matrix":matrix}
@@ -1243,16 +1242,16 @@ class DaeExporter:
 		elif (node.data != None):
 			if (node.data in lookup["skin_controller"]):
 				skin_id = lookup["skin_controller"][node.data]
-				skin_sid="skin"
-				self.writel(S_NODES, il, '<instance_controller url="#' + skin_id + '" sid="'+skin_sid+'">')
+				skin_sid = "skin"
+				self.writel(S_NODES, il, '<instance_controller url="#' + skin_id + '" sid="' + skin_sid + '">')
 				if (node.parent != None):
 					self.writel(S_NODES, il + 1, '<skeleton>#' + nodes_lookup[node.parent] + '</skeleton>')
 				self.export_material_bind(node, il, lookup)
 				self.writel(S_NODES, il, "</instance_controller>")
 			elif (node.data in lookup["geometry_morphs"]):
 				morph_id = lookup["morph"][node.data][0]
-				morph_sid="morph"
-				self.writel(S_NODES, il, '<instance_controller url="#' + morph_id + '" sid="'+morph_sid+'">')
+				morph_sid = "morph"
+				self.writel(S_NODES, il, '<instance_controller url="#' + morph_id + '" sid="' + morph_sid + '">')
 				self.export_material_bind(node, il, lookup)
 				self.writel(S_NODES, il, "</instance_controller>")
 			elif (node.data in lookup["mesh"]):
@@ -1317,14 +1316,14 @@ class DaeExporter:
 			return
 		if not len(node.material_slots):
 			return
-		material_bind = lookup["material_bind"].get(node.data,None)
+		material_bind = lookup["material_bind"].get(node.data, None)
 		if not material_bind:
 			return
 		
 		self.writel(S_NODES, il + 1, '<bind_material>')
 		self.writel(S_NODES, il + 2, '<technique_common>')
 		for material_slot, material_symbol in material_bind.items():
-			material=node.material_slots[material_slot].material
+			material = node.material_slots[material_slot].material
 			if material:
 				material_id = lookup["material"][material]
 				if material_id:
@@ -1466,10 +1465,10 @@ class DaeExporter:
 		self.writel(S_P_MODEL, 5, '<rotate>0 0 1 0</rotate>')
 		self.writel(S_P_MODEL, 4, '</mass_frame>')
 		self.writel(S_P_MODEL, 4, '<shape>')
-		try: # in case no physics material in the lookup
+		try:  # in case no physics material in the lookup
 			self.writel(S_P_MODEL, 5, '<instance_physics_material url="#{}"/>'.format(lookup['physics_material'][node.data]))
 		except:
-			pass # don't need it then
+			pass  # don't need it then
 		shape_funcs = {
 					'BOX': self.export_box_shape,
 					'SPHERE': self.export_sphere_shape,
@@ -1622,7 +1621,7 @@ class DaeExporter:
 		nodes_lookup = {}
 				
 		self.writel(S_NODES, 0, '<library_visual_scenes>')
-		self.writel(S_NODES, 1, '<visual_scene id="' + self.scene_name + '" name="'+ self.scene_name +'">')
+		self.writel(S_NODES, 1, '<visual_scene id="' + self.scene_name + '" name="' + self.scene_name + '">')
 
 		for obj in self.valid_nodes:
 			if (obj.parent == None):
@@ -1651,7 +1650,7 @@ class DaeExporter:
 			anim_id = target + "-anim"
 		else:
 			anim_id = action_name + "-" + target + "-anim"
-		anim_id=self.get_node_id(anim_id.replace("/","-"))
+		anim_id = self.get_node_id(anim_id.replace("/", "-"))
 		
 		self.writel(S_ANIM, 1, '<animation id="' + anim_id + '">')
 
@@ -1790,7 +1789,7 @@ class DaeExporter:
 		frame_orig = self.scene.frame_current
 
 		frame_len = 1.0 / self.scene.render.fps
-		frame_sub = (start-1) * frame_len
+		frame_sub = (start - 1) * frame_len
 
 		xform_cache = {}
 		blend_cache = {}
@@ -1801,7 +1800,7 @@ class DaeExporter:
 			self.scene.frame_set(t)
 			# self.scene.update();
 			
-			key = (t-1) * frame_len - frame_sub
+			key = (t - 1) * frame_len - frame_sub
 
 			for node in self.scene.objects:
 
@@ -1809,15 +1808,15 @@ class DaeExporter:
 					continue
 				if (node.data and (node.data in lookup["morph"])):
 					morph_controller = lookup["morph"][node.data]
-					morph_id=morph_controller[0]
-					targets=morph_controller[1]
-					for i in range(1,len(node.data.shape_keys.key_blocks)):
+					morph_id = morph_controller[0]
+					targets = morph_controller[1]
+					for i in range(1, len(node.data.shape_keys.key_blocks)):
 
-						name = morph_id + "/" +targets[i-1][0]
+						name = morph_id + "/" + targets[i - 1][0]
 						if (not (name in blend_cache)):
 							blend_cache[name] = []
 
-						self.append_morph_keyframe_if_different(blend_cache[name],key, node.data.shape_keys.key_blocks[i].value)
+						self.append_morph_keyframe_if_different(blend_cache[name], key, node.data.shape_keys.key_blocks[i].value)
 
 
 				if (node.type == "ARMATURE"):
@@ -1833,159 +1832,159 @@ class DaeExporter:
 						transform = self.get_posebone_transform(node.pose.bones, posebone)
 						if (not (bone_node_id in xform_cache)):
 							xform_cache[bone_node_id] = []
-						self.append_keyframe_if_different(xform_cache[bone_node_id],transform,key)
+						self.append_keyframe_if_different(xform_cache[bone_node_id], transform, key)
 
 				transform = self.get_node_local_transform(node)
 				node_id = lookup["nodes"][node]
 				if (not (node_id in xform_cache)):
 					xform_cache[node_id] = []
-				self.append_keyframe_if_different(xform_cache[node_id],transform,key)
+				self.append_keyframe_if_different(xform_cache[node_id], transform, key)
 
 		self.scene.frame_set(frame_orig)
 
 		xform_cache = self.xform_cache_without_constants(xform_cache)
-		blend_cache=self.blend_cache_without_constants(blend_cache)
+		blend_cache = self.blend_cache_without_constants(blend_cache)
 		
 		return xform_cache, blend_cache
 	
-	def append_morph_keyframe_if_different(self,morph_keyframes,new_key,new_value):
-		different=False
+	def append_morph_keyframe_if_different(self, morph_keyframes, new_key, new_value):
+		different = False
 		if (len(morph_keyframes)):
-			prev_value=morph_keyframes[-1][1];
-			if (abs(prev_value-new_value)>CMP_EPSILON):
+			prev_value = morph_keyframes[-1][1];
+			if (abs(prev_value - new_value) > CMP_EPSILON):
 				different = True
 		else:
-			different=True
+			different = True
 		
 		if different:
-			morph_keyframes.append((new_key,new_value))
+			morph_keyframes.append((new_key, new_value))
 	
-	def blend_cache_without_constants(self,blend_cache):
+	def blend_cache_without_constants(self, blend_cache):
 		# remove morph animations that only have one weight value
-		blend_result={}
-		for name,keyframes in blend_cache.items():
-			if (len(keyframes)>1):
-				blend_result[name]=keyframes
+		blend_result = {}
+		for name, keyframes in blend_cache.items():
+			if (len(keyframes) > 1):
+				blend_result[name] = keyframes
 				
 		return blend_result
 			
-	def xform_cache_without_constants(self,xform_cache):
+	def xform_cache_without_constants(self, xform_cache):
 		# remove fcurves that have only one transformation over the entire timeline
-		xform_result={}
-		for name,transforms in xform_cache.items():
-			if (len(transforms)>1):
-				xform_result[name]=transforms
+		xform_result = {}
+		for name, transforms in xform_cache.items():
+			if (len(transforms) > 1):
+				xform_result[name] = transforms
 		return xform_result
 	
-	def append_keyframe_if_different(self,transforms,new_transform,new_key):
-		different=False
+	def append_keyframe_if_different(self, transforms, new_transform, new_key):
+		different = False
 
 		if (len(transforms)):
-			prev_transform=transforms[-1][1];
-			prev_matrix=prev_transform.get("matrix")
-			new_matrix=new_transform.get("matrix")
+			prev_transform = transforms[-1][1];
+			prev_matrix = prev_transform.get("matrix")
+			new_matrix = new_transform.get("matrix")
 			if (prev_matrix and new_matrix):
-				same_matrix=matrix_equal(prev_matrix,new_matrix)
+				same_matrix = matrix_equal(prev_matrix, new_matrix)
 			else:
-				same_matrix=True
+				same_matrix = True
 			
-			different=not same_matrix
+			different = not same_matrix
 			
 			if (not different):
-				prev_scale	=prev_transform.get("scale")
-				new_scale=new_transform.get("scale")
+				prev_scale	 = prev_transform.get("scale")
+				new_scale = new_transform.get("scale")
 				if (prev_scale and new_scale):
-					same_scale=vector_equal(prev_scale,new_scale)
+					same_scale = vector_equal(prev_scale, new_scale)
 				else:
-					same_scale=True
-				different=not same_scale
+					same_scale = True
+				different = not same_scale
 		else:
-			different=True
+			different = True
 		
 		if (different):
-			transforms.append((new_key,new_transform))
+			transforms.append((new_key, new_transform))
 			
 	def get_NLA_objects(self):
-		objects={}
+		objects = {}
 		
 		for node in self.scene.objects:
 			if node.animation_data and node.animation_data.nla_tracks:
-				objects[node]=[]
-				tracks=node.animation_data.nla_tracks
+				objects[node] = []
+				tracks = node.animation_data.nla_tracks
 				for track in tracks:
 					if track.strips:
-						strips=[]
+						strips = []
 						for strip in track.strips:
 							strips.append((strip, strip.mute))
-						objects[node].append((track,track.mute,strips))
+						objects[node].append((track, track.mute, strips))
 				
 		return objects
 	
-	def mute_NLA(self,nla_objects):
+	def mute_NLA(self, nla_objects):
 		for tracks in nla_objects.values():
 			for track in tracks:
-				track[0].mute=True
+				track[0].mute = True
 				for strip in track[2]:
-					strip[0].mute=True
+					strip[0].mute = True
 			
-	def restore_NLA(self,nla_objects):
+	def restore_NLA(self, nla_objects):
 		for tracks in nla_objects.values():
 			for track in tracks:
-				track[0].mute=track[1]
+				track[0].mute = track[1]
 				for strip in track[2]:
-					strip[0].mute=strip[1]
+					strip[0].mute = strip[1]
 		
 		
 	def export_animation_clip(self, id, start, end, tcn):
-		self.writel(S_ANIM_CLIPS, 1, '<animation_clip id="' + id + "-clip" + '" start="' + str((start-1) / self.scene.render.fps) + '" end="' + str((end-1) / self.scene.render.fps) + '">')
+		self.writel(S_ANIM_CLIPS, 1, '<animation_clip id="' + id + "-clip" + '" start="' + str((start - 1) / self.scene.render.fps) + '" end="' + str((end - 1) / self.scene.render.fps) + '">')
 		for z in tcn:
 			self.writel(S_ANIM_CLIPS, 2, '<instance_animation url="#' + z + '"/>')
 		self.writel(S_ANIM_CLIPS, 1, '</animation_clip>')
 
 
-	def export_timeline(self, action_name,start,end,lookup):
-		xform_cache, blend_cache = self.get_animation_transforms(start,end, lookup)
+	def export_timeline(self, action_name, start, end, lookup):
+		xform_cache, blend_cache = self.get_animation_transforms(start, end, lookup)
 		tcn = []
-		for node_id,cache in xform_cache.items():
+		for node_id, cache in xform_cache.items():
 			tcn.append(self.export_animation_xforms(node_id, action_name, cache))
-		for target_id,cache in blend_cache.items():
+		for target_id, cache in blend_cache.items():
 			tcn.append(self.export_animation_blends(target_id, action_name, cache))
-		self.export_animation_clip(action_name, start,end, tcn)
+		self.export_animation_clip(action_name, start, end, tcn)
 
-	def unmute_NLA_object(self,node):
+	def unmute_NLA_object(self, node):
 		for track in node.animation_data.nla_tracks:
-			track.mute=False
+			track.mute = False
 			for strip in track.strips:
-				strip.mute=False
+				strip.mute = False
 
-	def unmute_NLA_track(self,track):
-		track.mute=False
+	def unmute_NLA_track(self, track):
+		track.mute = False
 		for strip in track.strips:
-			strip.mute=False
+			strip.mute = False
 								
-	def get_NLA_object_timeline(self,node):
+	def get_NLA_object_timeline(self, node):
 		start = sys.float_info.max;
-		end=-sys.float_info.max;
+		end = -sys.float_info.max;
 		for track in node.animation_data.nla_tracks:
 			for strip in track.strips:
-				if start>strip.frame_start:
-					start=strip.frame_start
-				if end<strip.frame_end:
-					end=strip.frame_end
+				if start > strip.frame_start:
+					start = strip.frame_start
+				if end < strip.frame_end:
+					end = strip.frame_end
 		
-		return int(start),int(end)
+		return int(start), int(end)
 		
 
-	def get_NLA_track_timeline(self,track):
+	def get_NLA_track_timeline(self, track):
 		start = sys.float_info.max;
-		end=-sys.float_info.max;
+		end = -sys.float_info.max;
 		for strip in track.strips:
-			if start>strip.frame_start:
-				start=strip.frame_start
-			if end<strip.frame_end:
-				end=strip.frame_end
+			if start > strip.frame_start:
+				start = strip.frame_start
+			if end < strip.frame_end:
+				end = strip.frame_end
 		
-		return int(start),int(end)
+		return int(start), int(end)
 	
 	def export_animations(self, lookup):
 		
@@ -1993,35 +1992,35 @@ class DaeExporter:
 		self.writel(S_ANIM_CLIPS, 0, '<library_animation_clips>')
 
 		if (self.config["use_anim_timeline"]):
-			self.export_timeline("timeline",self.scene.frame_start,self.scene.frame_end,lookup)
+			self.export_timeline("timeline", self.scene.frame_start, self.scene.frame_end, lookup)
 
-		if self.config["clip_type"]!='NONE':
+		if self.config["clip_type"] != 'NONE':
 			nla = self.get_NLA_objects()
 
-			if self.config["clip_type"]=='OBJECT':
+			if self.config["clip_type"] == 'OBJECT':
 				for node in nla.keys():
 					self.mute_NLA(nla)
 					self.unmute_NLA_object(node)
-					start,end = self.get_NLA_object_timeline(node)
-					self.export_timeline(self.get_node_id(node.name),start,end,lookup)
+					start, end = self.get_NLA_object_timeline(node)
+					self.export_timeline(self.get_node_id(node.name), start, end, lookup)
 			
-			if self.config["clip_type"]=='TRACK':
+			if self.config["clip_type"] == 'TRACK':
 				for tracks in nla.values():
 					for track in tracks:
 						self.mute_NLA(nla)
 						self.unmute_NLA_track(track[0])
-						start,end = self.get_NLA_track_timeline(track[0])
-						self.export_timeline(self.get_node_id(track[0].name),start,end,lookup)
+						start, end = self.get_NLA_track_timeline(track[0])
+						self.export_timeline(self.get_node_id(track[0].name), start, end, lookup)
 						
-			if self.config["clip_type"]=='STRIP':
+			if self.config["clip_type"] == 'STRIP':
 				for tracks in nla.values():
 					for track in tracks:
 						for strip in track[2]:
-							strip[0].mute=False
-							start =int(strip[0].frame_start)
+							strip[0].mute = False
+							start = int(strip[0].frame_start)
 							end = int(strip[0].frame_end)
-							self.export_timeline(self.get_node_id(strip[0].name),start,end,lookup)
-							strip[0].mute=True
+							self.export_timeline(self.get_node_id(strip[0].name), start, end, lookup)
+							strip[0].mute = True
 			
 			
 			self.restore_NLA(nla)
@@ -2131,7 +2130,7 @@ class DaeExporter:
 		self.scene = bpy.context.scene
 		self.last_id = 0
 		self.scene_name = os.path.basename(bpy.data.filepath)
-		self.scene_name=self.scene_name.replace(".blend","")
+		self.scene_name = self.scene_name.replace(".blend", "")
 		self.sections = {}
 		self.path = path
 		self.skeleton_info = {}
@@ -2150,6 +2149,6 @@ def save(operator, context,
 
 	exp = DaeExporter(filepath, kwargs, operator)
 	exp.export()
-	return {'FINISHED'} # so the script wont run after we have batch exported.
+	return {'FINISHED'}  # so the script wont run after we have batch exported.
 
 
