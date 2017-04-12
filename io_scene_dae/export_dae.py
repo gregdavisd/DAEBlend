@@ -1108,7 +1108,8 @@ class DaeExporter:
 		return self.transform_to_xml(self.get_bone_transform(bone))
 	
 	def get_node_transform_xml(self, node):
-		return self.transform_to_xml(self.get_node_local_transform(node))
+		transform,visible=self.get_node_local_transform(node)
+		return self.transform_to_xml(transform)
 	
 	def transform_to_xml(self, transform):
 		if (self.transform_matrix_scale):
@@ -1136,6 +1137,7 @@ class DaeExporter:
 		return None, None
 		
 	def get_node_local_transform(self, node):
+		visible=True
 		if (node.parent_type == 'BONE'):
 			armature = node.parent
 			parent_bone = armature.data.bones[node.parent_bone]
@@ -1144,14 +1146,19 @@ class DaeExporter:
 			else:
 				parent = self.get_bone_deform_parent(parent_bone)
 			if (not parent):
-				parent = armature
 				matrix = node.matrix_local.copy()
 			else:
-				parent = armature.pose.bones[node.parent_bone]
-				matrix = parent.matrix.inverted() * (armature.matrix_world.inverted() * node.matrix_world)
-			
+				pose_parent = armature.pose.bones[parent.name]
+				if (pose_parent.matrix.determinant()==0) or (armature.matrix_world.determinant()==0):
+					visible=False
+					matrix = Matrix()
+				else:
+					matrix = pose_parent.matrix.inverted() * (armature.matrix_world.inverted() * node.matrix_world)
 		else:
 			matrix = node.matrix_local.copy()
+			if node.parent:
+				if node.parent.matrix_local.determinant()==0:
+					visible=False
 		
 		if (node.type == 'CAMERA'):
 			m = Matrix.Rotation(-math.pi / 2.0, 4, Vector((1, 0, 0)))
@@ -1160,9 +1167,9 @@ class DaeExporter:
 			
 		if (self.transform_matrix_scale):
 			matrix, scale = self.split_matrix_scale(matrix)
-			return {"matrix":matrix, "scale":scale}
+			return {"matrix":matrix, "scale":scale},visible
 		else:
-			return {"matrix":matrix}
+			return {"matrix":matrix},visible
 
 		
 	def get_bone_deform_parent(self, bone):
@@ -1181,7 +1188,7 @@ class DaeExporter:
 		# get the transform relative to the parent bone.
 		
 		parent = self.get_bone_deform_parent(bone)
-		if (parent != None):
+		if ((parent != None) and (parent.matrix_local.determinant()!=0)):
 			matrix = parent.matrix_local.inverted() * bone.matrix_local
 		else:
 			matrix = bone.matrix_local.copy()
@@ -1198,7 +1205,10 @@ class DaeExporter:
 			parent_bone = self.get_bone_deform_parent(posebone.bone)
 			if (parent_bone):
 				parent = posebones_map[parent_bone.name]
-				matrix = parent.matrix.inverted() * matrix
+				if parent.matrix.determinant() != 0:
+					matrix = parent.matrix.inverted() * matrix
+				else:
+					return None
 				
 		if (self.transform_matrix_scale):
 			matrix, scale = self.split_matrix_scale(matrix)
@@ -1302,7 +1312,7 @@ class DaeExporter:
 			valid = False
 			# print("NAME: "+node.name)
 			for i in range(20):
-				if (node.layers[i] and  self.scene.layers[i]):
+				if (node.layers[i] and self.scene.layers[i]):
 					valid = True
 					break
 			if (not valid):
@@ -1789,7 +1799,6 @@ class DaeExporter:
 		frame_orig = self.scene.frame_current
 
 		frame_len = 1.0 / self.scene.render.fps
-		frame_sub = (start - 1) * frame_len
 
 		xform_cache = {}
 		blend_cache = {}
@@ -1798,9 +1807,8 @@ class DaeExporter:
 
 		for t in range(start, end + 1):
 			self.scene.frame_set(t)
-			# self.scene.update();
 			
-			key = (t - 1) * frame_len - frame_sub
+			key = (t - 1) * frame_len
 
 			for node in self.scene.objects:
 
@@ -1830,15 +1838,17 @@ class DaeExporter:
 
 						posebone = node.pose.bones[bone.name]
 						transform = self.get_posebone_transform(node.pose.bones, posebone)
-						if (not (bone_node_id in xform_cache)):
-							xform_cache[bone_node_id] = []
-						self.append_keyframe_if_different(xform_cache[bone_node_id], transform, key)
+						if transform:
+							if (not (bone_node_id in xform_cache)):
+								xform_cache[bone_node_id] = []
+							self.append_keyframe_if_different(xform_cache[bone_node_id], transform, key)
 
-				transform = self.get_node_local_transform(node)
-				node_id = lookup["nodes"][node]
-				if (not (node_id in xform_cache)):
-					xform_cache[node_id] = []
-				self.append_keyframe_if_different(xform_cache[node_id], transform, key)
+				transform,visible = self.get_node_local_transform(node)
+				if visible:
+					node_id = lookup["nodes"][node]
+					if (not (node_id in xform_cache)):
+						xform_cache[node_id] = []
+					self.append_keyframe_if_different(xform_cache[node_id], transform, key)
 
 		self.scene.frame_set(frame_orig)
 
@@ -1936,7 +1946,7 @@ class DaeExporter:
 		
 		
 	def export_animation_clip(self, id, start, end, tcn):
-		self.writel(S_ANIM_CLIPS, 1, '<animation_clip id="' + id + "-clip" + '" start="' + str((start - 1) / self.scene.render.fps) + '" end="' + str((end - 1) / self.scene.render.fps) + '">')
+		self.writel(S_ANIM_CLIPS, 1, '<animation_clip id="' + id + '" start="' + str((start - 1) / self.scene.render.fps) + '" end="' + str((end - 1) / self.scene.render.fps) + '">')
 		for z in tcn:
 			self.writel(S_ANIM_CLIPS, 2, '<instance_animation url="#' + z + '"/>')
 		self.writel(S_ANIM_CLIPS, 1, '</animation_clip>')
