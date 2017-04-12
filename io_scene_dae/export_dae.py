@@ -1122,20 +1122,6 @@ class DaeExporter:
 			
 		return [e for t in transforms for e in t]
 
-	def get_node_bone_parenting(self, node):
-		scan_node = node
-		while (scan_node.parent):
-			if (scan_node.parent_type == 'BONE'):
-				armature = scan_node.parent
-				if (armature.data.bones[scan_node.parent_bone].use_deform):
-					parent_bone = armature.pose.bones[scan_node.parent_bone]
-					return armature, parent_bone
-				else:
-					scan_node = scan_node.parent
-			else:
-				scan_node = scan_node.parent
-		return None, None
-		
 	def get_node_local_transform(self, node):
 		visible=True
 		if (node.parent_type == 'BONE'):
@@ -1149,7 +1135,7 @@ class DaeExporter:
 				matrix = node.matrix_local.copy()
 			else:
 				pose_parent = armature.pose.bones[parent.name]
-				if (pose_parent.matrix.determinant()==0) or (armature.matrix_world.determinant()==0):
+				if self.is_zero_scale(pose_parent.matrix) or self.is_zero_scale(armature.matrix_world):
 					visible=False
 					matrix = Matrix()
 				else:
@@ -1157,7 +1143,7 @@ class DaeExporter:
 		else:
 			matrix = node.matrix_local.copy()
 			if node.parent:
-				if node.parent.matrix_local.determinant()==0:
+				if self.is_zero_scale(node.parent.matrix_local):
 					visible=False
 		
 		if (node.type == 'CAMERA'):
@@ -1188,7 +1174,7 @@ class DaeExporter:
 		# get the transform relative to the parent bone.
 		
 		parent = self.get_bone_deform_parent(bone)
-		if ((parent != None) and (parent.matrix_local.determinant()!=0)):
+		if (parent != None) and not self.is_zero_scale(parent.matrix_local):
 			matrix = parent.matrix_local.inverted() * bone.matrix_local
 		else:
 			matrix = bone.matrix_local.copy()
@@ -1205,7 +1191,7 @@ class DaeExporter:
 			parent_bone = self.get_bone_deform_parent(posebone.bone)
 			if (parent_bone):
 				parent = posebones_map[parent_bone.name]
-				if parent.matrix.determinant() != 0:
+				if not self.is_zero_scale(parent.matrix):
 					matrix = parent.matrix.inverted() * matrix
 				else:
 					return None
@@ -1886,6 +1872,12 @@ class DaeExporter:
 				xform_result[name] = transforms
 		return xform_result
 	
+	def is_zero_scale(self,matrix):
+		if (matrix[0][0]==0.0) and (matrix[1][1]==0) and (matrix[2][2]==0):
+			return True
+		else:
+			return False
+		
 	def append_keyframe_if_different(self, transforms, new_transform, new_key):
 		different = False
 
