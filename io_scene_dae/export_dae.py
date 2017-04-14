@@ -322,6 +322,12 @@ class DaeExporter:
 			mesh.calc_normals_split()
 			return False
 
+	def average_color(self, color, count):
+		if count != 0:
+			return Color(color / count)
+		else:
+			return Color(color)
+		
 	def get_mesh_surfaces(self, mesh):
 		# Turn the mesh into buffers and index buffers, polygons are grouped by material index
 		
@@ -379,7 +385,7 @@ class DaeExporter:
 				color_buckets[loop_vertex.vertex_index][0] += 1
 				color_buckets[loop_vertex.vertex_index][1] += Vector(mesh.vertex_colors.active.data[loop_vertex.index].color)
 				
-			colors = [Color(color / count) for (count, color) in color_buckets]
+			colors = [self.average_color(color, count) for (count, color) in color_buckets if count != 0]
 		else:
 			colors = []
 			
@@ -609,12 +615,13 @@ class DaeExporter:
 				armatures = [mod for mod in node.modifiers.values() if (mod.type == "ARMATURE") and mod.use_vertex_groups]
 				for armature in armatures:
 					skin_id = self.get_node_id(node.data.name + "-" + armature.object.name + "-skin")
+					lu = {"skin":skin_id, "skeleton":armature.object.name}
 					if (node.data in skin_controller_lookup):
-						skin_controller_lookup[node.data].append(skin_id)
+						skin_controller_lookup[node.data].append(lu)
 					else:
-						skin_controller_lookup[node.data] = skin_id
+						skin_controller_lookup[node.data] = [lu]
 					if (node.data in morph_lookup):
-						mesh_id = morph_lookup[node.data]
+						mesh_id = morph_lookup[node.data][0]
 					else:
 						mesh_id = mesh_lookup[node.data]
 					self.export_skin_controller(node, armature.object, mesh_id , skin_id)
@@ -622,7 +629,7 @@ class DaeExporter:
 		
 	def export_skin_controller(self, node, armature, mesh_id, skin_id):
 		group_names = [group.name for group in node.vertex_groups.values()]
-		bones = [armature.data.bones[name] for name in group_names]
+		bones = [armature.data.bones[name] for name in group_names if name in armature.data.bones.keys()]
 		pose_matrices = [(armature.matrix_world * bone.matrix_local).inverted() for bone in bones]
 		weight_counts = [len(v.groups) for v in node.data.vertices]
 		weights = list(set([group.weight for v in node.data.vertices for group in v.groups]))
@@ -1108,7 +1115,7 @@ class DaeExporter:
 		return self.transform_to_xml(self.get_bone_transform(bone))
 	
 	def get_node_transform_xml(self, node):
-		transform,visible=self.get_node_local_transform(node)
+		transform, visible = self.get_node_local_transform(node)
 		return self.transform_to_xml(transform)
 	
 	def transform_to_xml(self, transform):
@@ -1123,7 +1130,7 @@ class DaeExporter:
 		return [e for t in transforms for e in t]
 
 	def get_node_local_transform(self, node):
-		visible=True
+		visible = True
 		if (node.parent_type == 'BONE'):
 			armature = node.parent
 			parent_bone = armature.data.bones[node.parent_bone]
@@ -1136,7 +1143,7 @@ class DaeExporter:
 			else:
 				pose_parent = armature.pose.bones[parent.name]
 				if self.is_zero_scale(pose_parent.matrix) or self.is_zero_scale(armature.matrix_world):
-					visible=False
+					visible = False
 					matrix = Matrix()
 				else:
 					matrix = pose_parent.matrix.inverted() * (armature.matrix_world.inverted() * node.matrix_world)
@@ -1144,7 +1151,7 @@ class DaeExporter:
 			matrix = node.matrix_local.copy()
 			if node.parent:
 				if self.is_zero_scale(node.parent.matrix_local):
-					visible=False
+					visible = False
 		
 		if (node.type == 'CAMERA'):
 			m = Matrix.Rotation(-math.pi / 2.0, 4, Vector((1, 0, 0)))
@@ -1153,9 +1160,9 @@ class DaeExporter:
 			
 		if (self.transform_matrix_scale):
 			matrix, scale = self.split_matrix_scale(matrix)
-			return {"matrix":matrix, "scale":scale},visible
+			return {"matrix":matrix, "scale":scale}, visible
 		else:
-			return {"matrix":matrix},visible
+			return {"matrix":matrix}, visible
 
 		
 	def get_bone_deform_parent(self, bone):
@@ -1237,13 +1244,16 @@ class DaeExporter:
 			self.export_armature_node(node, il, lookup, nodes_lookup)
 		elif (node.data != None):
 			if (node.data in lookup["skin_controller"]):
-				skin_id = lookup["skin_controller"][node.data]
-				skin_sid = "skin"
-				self.writel(S_NODES, il, '<instance_controller url="#' + skin_id + '" sid="' + skin_sid + '">')
-				if (node.parent != None):
-					self.writel(S_NODES, il + 1, '<skeleton>#' + nodes_lookup[node.parent] + '</skeleton>')
-				self.export_material_bind(node, il, lookup)
-				self.writel(S_NODES, il, "</instance_controller>")
+				count = 0
+				for skin_lookup in lookup["skin_controller"][node.data]: 
+					skin_id = skin_lookup['skin']
+					skeleton = skin_lookup['skeleton']
+					skin_sid = "skin" + str(count)
+					self.writel(S_NODES, il, '<instance_controller url="#' + skin_id + '" sid="' + skin_sid + '">')
+					self.writel(S_NODES, il + 1, '<skeleton>#' + skeleton + '</skeleton>')
+					self.export_material_bind(node, il, lookup)
+					self.writel(S_NODES, il, "</instance_controller>")
+					count += 1
 			elif (node.data in lookup["geometry_morphs"]):
 				morph_id = lookup["morph"][node.data][0]
 				morph_sid = "morph"
@@ -1829,7 +1839,7 @@ class DaeExporter:
 								xform_cache[bone_node_id] = []
 							self.append_keyframe_if_different(xform_cache[bone_node_id], transform, key)
 
-				transform,visible = self.get_node_local_transform(node)
+				transform, visible = self.get_node_local_transform(node)
 				if visible:
 					node_id = lookup["nodes"][node]
 					if (not (node_id in xform_cache)):
@@ -1872,8 +1882,8 @@ class DaeExporter:
 				xform_result[name] = transforms
 		return xform_result
 	
-	def is_zero_scale(self,matrix):
-		if (matrix[0][0]==0.0) and (matrix[1][1]==0) and (matrix[2][2]==0):
+	def is_zero_scale(self, matrix):
+		if (matrix[0][0] == 0.0) and (matrix[1][1] == 0) and (matrix[2][2] == 0):
 			return True
 		else:
 			return False
