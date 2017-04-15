@@ -1332,8 +1332,7 @@ class DaeExporter:
 			material = node.material_slots[material_slot].material
 			if material:
 				material_id = lookup["material"][material]
-				if material_id:
-					self.writel(S_NODES, il + 3, '<instance_material symbol="' + material_symbol + '" target="#' + material_id + '"/>')
+				self.writel(S_NODES, il + 3, '<instance_material symbol="' + material_symbol + '" target="#' + material_id + '"/>')
 		self.writel(S_NODES, il + 2, '</technique_common>')
 		self.writel(S_NODES, il + 1, '</bind_material>')
 
@@ -1343,14 +1342,7 @@ class DaeExporter:
 		
 		if (self.config["use_export_selected"]):
 			# only export used materials for meshes that will be exported
-			materials = 	set(
-			filter(lambda mat : mat != None,
-			itertools.chain.from_iterable(
-				filter(lambda values : values != None,
-				map(lambda obj :	obj.data.materials,
-				filter(lambda node : hasattr(node.data, "materials"),
-					self.valid_nodes)
-			)))));
+			materials = [slot.material for n in self.valid_nodes if hasattr(n, "material_slots") for slot in n.material_slots]
 		else:
 			# Export all materials including those with fake users
 			materials = set([material for material in bpy.data.materials if material.users > 0])
@@ -2025,14 +2017,17 @@ class DaeExporter:
 						self.export_timeline(self.get_node_id(track[0].name), start, end, lookup)
 						
 			if self.config["clip_type"] == 'STRIP':
+				self.mute_NLA(nla)
 				for tracks in nla.values():
 					for track in tracks:
+						track[0].mute = False
 						for strip in track[2]:
 							strip[0].mute = False
 							start = int(strip[0].frame_start)
 							end = int(strip[0].frame_end)
 							self.export_timeline(self.get_node_id(strip[0].name), start, end, lookup)
 							strip[0].mute = True
+						track[0].mute=True
 			
 			
 			self.restore_NLA(nla)
