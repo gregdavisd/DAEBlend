@@ -65,6 +65,11 @@ S_ANIM_CLIPS = 15
 
 CMP_EPSILON = 0.01
 
+# number of times to recalculate frame to try and settle IK constraints into final
+# position
+
+SETTLE_IK_ITERATIONS=25
+
 def strmtx(mtx):
 	return " ".join([str(e) for v in mtx for e in v])
 
@@ -177,6 +182,8 @@ class DaeExporter:
 		emission_tex = None
 		normal_tex = None
 		ambient_tex = None
+		transparent_tex = None
+		
 		done_images = set()
 		
 		for i in range(len(material.texture_slots)):
@@ -208,6 +215,8 @@ class DaeExporter:
 
 			if (ts.use_map_color_diffuse and diffuse_tex == None):
 				diffuse_tex = sampler_sid
+			if (ts.use_map_alpha and diffuse_tex == None):
+				transparent_tex = sampler_sid
 			if (ts.use_map_color_spec and specular_tex == None):
 				specular_tex = sampler_sid
 			if (ts.use_map_emit and emission_tex == None):
@@ -229,27 +238,32 @@ class DaeExporter:
 		else:
 			self.writel(S_FX, 6, '<color>' + numarr_alpha(material.diffuse_color, material.emit) + ' </color>')  # not totally right but good enough
 		self.writel(S_FX, 5, '</emission>')
+		
 		self.writel(S_FX, 5, '<ambient>')
 		if (ambient_tex != None):
 			self.writel(S_FX, 6, '<texture texture="' + ambient_tex + '" texcoord="ambient"/>')
 		else:
 			self.writel(S_FX, 6, '<color>' + numarr_alpha(self.scene.world.ambient_color, material.ambient) + ' </color>')
 		self.writel(S_FX, 5, '</ambient>')
+		
 		self.writel(S_FX, 5, '<diffuse>')
 		if (diffuse_tex != None):
 			self.writel(S_FX, 6, '<texture texture="' + diffuse_tex + '" texcoord="diffuse"/>')
 		else:
 			self.writel(S_FX, 6, '<color>' + numarr_alpha(material.diffuse_color, material.diffuse_intensity) + '</color>')
 		self.writel(S_FX, 5, '</diffuse>')
+		
 		self.writel(S_FX, 5, '<specular>')
 		if (specular_tex != None):
 			self.writel(S_FX, 6, '<texture texture="' + specular_tex + '" texcoord="specular"/>')
 		else:
 			self.writel(S_FX, 6, '<color>' + numarr_alpha(material.specular_color, material.specular_intensity) + '</color>')
 		self.writel(S_FX, 5, '</specular>')
+		
 		self.writel(S_FX, 5, '<shininess>')
 		self.writel(S_FX, 6, '<float>' + str(material.specular_hardness) + '</float>')
 		self.writel(S_FX, 5, '</shininess>')
+		
 		self.writel(S_FX, 5, '<reflective>')
 		self.writel(S_FX, 6, '<color>' + numarr_alpha(material.mirror_color) + '</color>')
 		self.writel(S_FX, 5, '</reflective>')
@@ -258,15 +272,22 @@ class DaeExporter:
 			self.writel(S_FX, 5, '<transparency>')
 			self.writel(S_FX, 6, '<float>' + str(material.alpha) + '</float>')
 			self.writel(S_FX, 5, '</transparency>')
-
+		
+		if transparent_tex:
+			self.writel(S_FX, 5, '<transparent>')
+			self.writel(S_FX, 6, '<texture texture="' + transparent_tex + '" texcoord="transparent"/>')
+			self.writel(S_FX, 5, '</transparent>')
+		
 		self.writel(S_FX, 5, '<index_of_refraction>')
 		self.writel(S_FX, 6, '<float>' + str(material.specular_ior) + '</float>')
 		self.writel(S_FX, 5, '</index_of_refraction>')
+		
 		self.writel(S_FX, 4, '</' + shtype + '>')
 		if (normal_tex):
 			self.writel(S_FX, 4, '<bump bumptype="NORMALMAP">')
 			self.writel(S_FX, 5, '<texture texture="' + normal_tex + '" texcoord="normal"/>')
 			self.writel(S_FX, 4, '</bump>')
+			
 		self.writel(S_FX, 3, '</technique>')
 		self.writel(S_FX, 2, '</profile_COMMON>')
 		self.writel(S_FX, 1, '</effect>')
@@ -899,33 +920,43 @@ class DaeExporter:
 		if (do_export):
 			self.writel(S_NODES, il, '</node>')
 
+	def save_scene_pose(self):
+		self.pose_state = {}
+		for node in self.valid_nodes:
+			if node.data and hasattr(node.data, 'pose_position'):
+				pose_position = node.data.pose_position	
+				self.pose_state[node] = pose_position	
+		
+	def rest_scene(self):
+		for node in self.valid_nodes:
+			if node.data and hasattr(node.data, 'pose_position'):
+				pose_position = node.data.pose_position		
+				if (pose_position == 'POSE'):
+					node.data.pose_position = 'REST'
+		bpy.context.scene.update();
+		self.settle_ik()
+		
+	def restore_scene_pose(self):
+		for node, pose_position in self.pose_state.items():
+			node.data.pose_position = pose_position
+		bpy.context.scene.update();
+							
 	def export_armature_node(self, node, il, lookup, nodes_lookup):
 		
 		# Export the rig in rest mode, this ensures that geometry attached to bones are also at the rest position
 		
-		pose_position = node.data.pose_position
-		if (pose_position == 'POSE'):
-			node.data.pose_position = 'REST'
-			bpy.context.scene.update();
-		
-		try:	
-			parenting_map = self.get_armature_children_of_bones(node)
-			self.skeletons.append(node)
-	
-			armature = node.data
-			self.skeleton_info[node] = { "name":node.name, "bone_ids":{}, "has_transform":{}}
-	
-			for b in armature.bones:
-				if (b.parent != None):
-					# this node will be exported when the parent exports its children
-					continue
-				self.export_armature_bone(b, il, self.skeleton_info[node], lookup, nodes_lookup, parenting_map)
-		
-		finally:
-			# restore original pose position setting
-			if (pose_position != node.data.pose_position):
-				node.data.pose_position = pose_position
-				bpy.context.scene.update();							
+		parenting_map = self.get_armature_children_of_bones(node)
+		self.skeletons.append(node)
+
+		armature = node.data
+		self.skeleton_info[node] = { "name":node.name, "bone_ids":{}, "has_transform":{}}
+
+		for b in armature.bones:
+			if (b.parent != None):
+				# this node will be exported when the parent exports its children
+				continue
+			self.export_armature_bone(b, il, self.skeleton_info[node], lookup, nodes_lookup, parenting_map)
+					
 
 	def export_cameras(self):
 		cameras = 	set(
@@ -1616,18 +1647,25 @@ class DaeExporter:
 		
 	def export_scene(self, lookup):
 
-		nodes_lookup = {}
-				
-		self.writel(S_NODES, 0, '<library_visual_scenes>')
-		self.writel(S_NODES, 1, '<visual_scene id="' + self.scene_name + '" name="' + self.scene_name + '">')
-
-		for obj in self.valid_nodes:
-			if (obj.parent == None):
-				self.export_node(obj, 2, lookup, nodes_lookup)
-
-		self.writel(S_NODES, 1, '</visual_scene>')
-		self.writel(S_NODES, 0, '</library_visual_scenes>')
-		return nodes_lookup
+		self.save_scene_pose()
+		self.rest_scene()
+		
+		try:
+			nodes_lookup = {}
+					
+			self.writel(S_NODES, 0, '<library_visual_scenes>')
+			self.writel(S_NODES, 1, '<visual_scene id="' + self.scene_name + '" name="' + self.scene_name + '">')
+	
+			for obj in self.valid_nodes:
+				if (obj.parent == None):
+					self.export_node(obj, 2, lookup, nodes_lookup)
+	
+			self.writel(S_NODES, 1, '</visual_scene>')
+			self.writel(S_NODES, 0, '</library_visual_scenes>')
+			return nodes_lookup
+		
+		finally:
+			self.restore_scene_pose()
 	
 	def export_asset(self):
 		self.writel(S_ASSET, 0, '<asset>')
@@ -1780,11 +1818,11 @@ class DaeExporter:
 
 	def get_animation_transforms(self, start, end, lookup):
 		
-		# Blender -> Collada frames needs a little work
-		# Collada starts from 0, blender usually from 1
-		# The last frame must be included also
 
 		frame_orig = self.scene.frame_current
+		
+		self.scene.frame_set(start)
+		self.settle_ik()	
 
 		frame_len = 1.0 / self.scene.render.fps
 
@@ -1794,8 +1832,7 @@ class DaeExporter:
 		# This improves performance enormously
 
 		for t in range(start, end + 1):
-			self.scene.frame_set(t)
-			
+			self.scene.frame_set(t)			
 			key = (t - 1) * frame_len
 
 			for node in self.scene.objects:
@@ -1946,6 +1983,27 @@ class DaeExporter:
 		self.writel(S_ANIM_CLIPS, 1, '</animation_clip>')
 
 
+	def settle_ik(self):
+		# fart around with frames so IK constraints settle into a final position (hopefully)
+		
+		frame_orig = self.scene.frame_current
+		for i in range(SETTLE_IK_ITERATIONS):
+			self.scene.frame_set(frame_orig)
+		#	bpy.context.scene.update();	
+			
+	def mute_timeline(self):
+		fcurves = [fcurve for fcurves in 
+				[animation_data.action.fcurves for animation_data in 
+				[object.animation_data for object in bpy.data.objects if object.animation_data ] 
+				if animation_data.action] for fcurve in fcurves]
+		self.save_fcurve_mute=dict([(fcurve,fcurve.mute) for fcurve in fcurves])
+		for fcurve in fcurves:
+			fcurve.mute=True
+		
+	def unmute_timeline(self):
+		for fcurve,mute in self.save_fcurve_mute.items():
+			fcurve.mute=mute
+			
 	def export_timeline(self, action_name, start, end, lookup):
 		xform_cache, blend_cache = self.get_animation_transforms(start, end, lookup)
 		tcn = []
@@ -1999,39 +2057,42 @@ class DaeExporter:
 			self.export_timeline("timeline", self.scene.frame_start, self.scene.frame_end, lookup)
 
 		if self.config["clip_type"] != 'NONE':
+			self.mute_timeline()
 			nla = self.get_NLA_objects()
-
-			if self.config["clip_type"] == 'OBJECT':
-				for node in nla.keys():
-					self.mute_NLA(nla)
-					self.unmute_NLA_object(node)
-					start, end = self.get_NLA_object_timeline(node)
-					self.export_timeline(self.get_node_id(node.name), start, end, lookup)
 			
-			if self.config["clip_type"] == 'TRACK':
-				for tracks in nla.values():
-					for track in tracks:
+			try:
+				if self.config["clip_type"] == 'OBJECT':
+					for node in nla.keys():
 						self.mute_NLA(nla)
-						self.unmute_NLA_track(track[0])
-						start, end = self.get_NLA_track_timeline(track[0])
-						self.export_timeline(self.get_node_id(track[0].name), start, end, lookup)
-						
-			if self.config["clip_type"] == 'STRIP':
-				self.mute_NLA(nla)
-				for tracks in nla.values():
-					for track in tracks:
-						track[0].mute = False
-						for strip in track[2]:
-							strip[0].mute = False
-							start = int(strip[0].frame_start)
-							end = int(strip[0].frame_end)
-							self.export_timeline(self.get_node_id(strip[0].name), start, end, lookup)
-							strip[0].mute = True
-						track[0].mute=True
+						self.unmute_NLA_object(node)
+						start, end = self.get_NLA_object_timeline(node)
+						self.export_timeline(self.get_node_id(node.name), start, end, lookup)
+				
+				if self.config["clip_type"] == 'TRACK':
+					for tracks in nla.values():
+						for track in tracks:
+							self.mute_NLA(nla)
+							self.unmute_NLA_track(track[0])
+							start, end = self.get_NLA_track_timeline(track[0])
+							self.export_timeline(self.get_node_id(track[0].name), start, end, lookup)
+							
+				if self.config["clip_type"] == 'STRIP':
+					self.mute_NLA(nla)
+					for tracks in nla.values():
+						for track in tracks:
+							track[0].mute = False
+							for strip in track[2]:
+								strip[0].mute = False
+								start = int(strip[0].frame_start)
+								end = int(strip[0].frame_end)
+								self.export_timeline(self.get_node_id(strip[0].name), start, end, lookup)
+								strip[0].mute = True
+							track[0].mute = True
 			
+			finally:
+				self.restore_NLA(nla)
+				self.unmute_timeline()
 			
-			self.restore_NLA(nla)
-
 		self.writel(S_ANIM_CLIPS, 0, '</library_animation_clips>')
 		self.writel(S_ANIM, 0, '</library_animations>')
 
@@ -2126,6 +2187,7 @@ class DaeExporter:
 				f.write(bytes('\t<instance_physics_scene url="#' + self.scene_name + '-physics' + '"/>\n', "UTF-8"))
 			f.write(bytes('</scene>\n', "UTF-8"))
 			f.write(bytes('</COLLADA>\n', "UTF-8"))
+			f.close()
 			
 		finally:
 			self.remove_export_meshes()
