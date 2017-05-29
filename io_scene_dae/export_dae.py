@@ -521,9 +521,8 @@ class DaeExporter:
 					convex_mesh = self.mesh_to_convex_hull(mesh)
 					if (convex_mesh):
 						convex_mesh_id = mesh_id + "-convex"
-						valid, material_bind = self.export_mesh(convex_mesh, convex_mesh_id, node.data.name, triangulate, True)
-						if (valid):
-							convex_geometry_lookup[node.data] = convex_mesh_id
+						material_bind = self.export_mesh(convex_mesh, convex_mesh_id, node.data.name, triangulate, True)
+						convex_geometry_lookup[node.data] = convex_mesh_id
 							
 				# export morphs from shape keys
 				
@@ -1478,14 +1477,15 @@ class DaeExporter:
 		for node in collision_shape_nodes:
 			if (not node.data in physics_model_lookup):
 				physics_model_id = self.get_node_id(node.data.name + '-model')
-				physics_model_lookup[node.data] = physics_model_id
-				self.export_physics_model(node, physics_model_id, lookup)
+				physics_model_sid= self.get_node_id(node.data.name + '-body')
+				physics_model_lookup[node.data] = (physics_model_id,physics_model_sid)
+				self.export_physics_model(node, physics_model_id, physics_model_sid, lookup)
 		self.writel(S_P_MODEL, 0, '</library_physics_models>')
 		return physics_model_lookup
 	
-	def export_physics_model(self, node, physics_model_id, lookup):
+	def export_physics_model(self, node, physics_model_id, physics_model_sid, lookup):
 		self.writel(S_P_MODEL, 1, '<physics_model id="{}">'.format(physics_model_id))
-		self.writel(S_P_MODEL, 2, '<rigid_body sid="{}">'.format(lookup['nodes'][node]))
+		self.writel(S_P_MODEL, 2, '<rigid_body sid="{}">'.format(physics_model_sid))
 		self.writel(S_P_MODEL, 3, '<technique_common>')
 		self.writel(S_P_MODEL, 4, '<dynamic>{}</dynamic>'.format(str(node.rigid_body.enabled).lower()))
 		self.writel(S_P_MODEL, 4, '<mass>{}</mass>'.format(node.rigid_body.mass))
@@ -1604,9 +1604,9 @@ class DaeExporter:
 				self.writel(S_P_MODEL, il, '<convex_mesh convex_hull_of="#{}"/>'.format(mesh_id))
 		
 	def export_mesh_shape(self, node, il, lookup):
-		mesh_id = self.get_physics_mesh_id(node, lookup)
+		convex, mesh_id = self.get_physics_mesh_id(node, lookup)
 		if (mesh_id != None):
-			self.writel(S_P_MODEL, il, '<instance_geometry url="#{}">'.format(mesh_id))
+			self.writel(S_P_MODEL, il, '<instance_geometry url="#{}"/>'.format(mesh_id))
 		
 	def export_physics_scene(self, lookup):
 		if (bpy.context.scene.rigidbody_world == None):
@@ -1642,8 +1642,28 @@ class DaeExporter:
 		self.writel(S_P_SCENE, 4, '</weights>')
 		self.writel(S_P_SCENE, 3, '</technique>')
 		self.writel(S_P_SCENE, 2, '</extra>')
+		self.export_physics_instances(lookup)
 		self.writel(S_P_SCENE, 1, '</physics_scene>')
 		self.writel(S_P_SCENE, 0, '</library_physics_scenes>')
+		
+		
+	def export_physics_instances(self,lookup):
+		rigid_body_nodes =[node for node in self.valid_nodes if (node.rigid_body != None)]
+		
+		for node in rigid_body_nodes:
+			physics_model = lookup['physics_model'][node.data]
+			sid = self.get_node_id(node.name + '-' + physics_model[0])
+			url = physics_model[0]
+			parent=lookup['nodes'][node]
+			self.writel(S_P_SCENE,2,'<instance_physics_model sid="{}" url="#{}" parent="#{}">'.format(sid,url,parent))
+			rigid_body=physics_model[1]
+			self.writel(S_P_SCENE,3,'<instance_rigid_body body="{}" target="#{}">'.format(rigid_body,parent))
+			self.writel(S_P_SCENE,4,'<technique_common>')
+			self.writel(S_P_SCENE,5,'<velocity>0 0 0</velocity>')
+			self.writel(S_P_SCENE,5,'<mass>{}</mass>'.format(node.rigid_body.mass))
+			self.writel(S_P_SCENE,4,'</technique_common>')
+			self.writel(S_P_SCENE,3,'</instance_rigid_body>')
+			self.writel(S_P_SCENE,2,'</instance_physics_model>')
 		
 	def export_scene(self, lookup):
 
