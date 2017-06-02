@@ -570,7 +570,7 @@ class DaeExporter:
 				morph_id = self.get_node_id(mesh_id + "-morph-" + shape.name)
 				morph_targets.append([morph_id, values[k - 1]])
 				export_mesh = self.node_to_mesh(node, triangulate)
-				self.export_mesh(export_mesh, morph_id, morph_id, triangulate)
+				self.export_mesh(export_mesh, morph_id, morph_id, triangulate, morph=True)
 				shape.value = values[k - 1]
 			
 			node.show_only_shape_key = scene_show_only_shape_key
@@ -632,7 +632,7 @@ class DaeExporter:
 		
 		for node in meshes:
 			if not node.data in skin_controller_lookup.keys():
-				armatures = [mod for mod in node.modifiers.values() if (mod.type == "ARMATURE") and mod.use_vertex_groups]
+				armatures = [mod for mod in node.modifiers.values() if (mod.type == "ARMATURE") and mod.show_render and mod.use_vertex_groups]
 				for armature in armatures:
 					skin_id = self.get_node_id(node.data.name + "-" + armature.object.name + "-skin")
 					lu = {"skin":skin_id, "skeleton":armature.object.name}
@@ -712,7 +712,7 @@ class DaeExporter:
 		self.writel(S_SKIN, 2, '</skin>')
 		self.writel(S_SKIN, 1, '</controller>')
 
-	def export_mesh(self, mesh, mesh_id, mesh_name, triangulated, convex=False):
+	def export_mesh(self, mesh, mesh_id, mesh_name, triangulated, convex=False, morph=False):
 
 		vertices, normals, uv, colors, surface_v_indices, surface_normal_indices, surface_uv_indices = self.get_mesh_surfaces(mesh)
 		
@@ -783,84 +783,96 @@ class DaeExporter:
 			self.writel(S_GEOM, 4, '</technique_common>')
 			self.writel(S_GEOM, 3, '</source>')
 
-		# Triangle Lists
+		# Vertices
 		self.writel(S_GEOM, 3, '<vertices id="' + mesh_id + '-vertices">')
-		self.writel(S_GEOM, 4, '<input semantic="POSITION" source="#' + mesh_id + '-positions"/>')
+		if (has_vertex):
+			self.writel(S_GEOM, 4, '<input semantic="POSITION" source="#' + mesh_id + '-positions"/>')
+		if morph:
+			if (has_normals):
+				self.writel(S_GEOM, 4, '<input semantic="NORMAL" source="#' + mesh_id + '-normals"/>')
+			if (has_uv):
+				self.writel(S_GEOM, 4, '<input semantic="TEXCOORD" source="#' + mesh_id + '-texcoord"/>')
+			if (has_colors):
+				self.writel(S_GEOM, 4, '<input semantic="COLOR" source="#' + mesh_id + '-colors"/>')
+				
 		self.writel(S_GEOM, 3, '</vertices>')
 
-		prim_type = ""
-		if (triangulated):
-			prim_type = "triangles"
-		else:
-			prim_type = "polylist"
-			
-		# calculate offsets and layout of <p> indices			
-		offset = 0
-		if (has_vertex):
-			vertex_offset = offset
-			offset += 1
-		if (has_normals):
-			normal_offset = offset
-			offset += 1
-		if (has_uv):
-			uv_offset = offset
-			offset += 1
-		if (has_colors):
-			color_offset = vertex_offset
-		stride = offset
-		
 		material_bind = {}
 		
-		for mat_index, polygons in surface_v_indices.items():
-			
-			# Every renderable mesh must have a material symbol even if no material is assigned in Blender.
-			matref = self.get_material_link_symbol("target")
-			material_bind[mat_index] = matref
-
-			self.writel(S_GEOM, 3, '<' + prim_type + ' count="' + str(len(polygons)) + '" material="' + matref + '">')  # todo material
-			if (has_vertex):
-				self.writel(S_GEOM, 4, '<input semantic="VERTEX" source="#' + mesh_id + '-vertices" offset="' + str(vertex_offset) + '"/>')
-			if (has_normals):
-				self.writel(S_GEOM, 4, '<input semantic="NORMAL" source="#' + mesh_id + '-normals" offset="' + str(normal_offset) + '"/>')
-			if (has_uv):
-				self.writel(S_GEOM, 4, '<input semantic="TEXCOORD" source="#' + mesh_id + '-texcoord" offset="' + str(uv_offset) + '" set="0"/>')
-			if (has_colors):
-				self.writel(S_GEOM, 4, '<input semantic="COLOR" source="#' + mesh_id + '-colors" offset="' + str(color_offset) + '"/>')
-			
-			# vcount list if not triangulating, as a triangle always has 3 sides no need for an array of 3s
-			if (not triangulated):
-				int_values = "<vcount>"
-				int_values += " ".join([str(len(p)) for p in polygons])
-				int_values += "</vcount>"
-				self.writel(S_GEOM, 4, int_values)
+		if not morph:
+			# Triangle Lists
+			prim_type = ""
+			if (triangulated):
+				prim_type = "triangles"
+			else:
+				prim_type = "polylist"
 				
-			# faces
-			int_values = "<p>"
-
-			index_buffer = []
-			indices = [0 for i in range(stride)]
-			for p in range(0, len(polygons)):
-				group_polygons = polygons[p]
-				normal_indices = None
-				uv_indices = None
-				if has_normals:
-					normal_indices = surface_normal_indices[mat_index][p]
-				if has_uv:
-					uv_indices = surface_uv_indices[mat_index][p]
-				for i in range(0, len(polygons[p])):
-					if (has_vertex):
-						indices[vertex_offset] = group_polygons[i]
-					if (has_normals):
-						indices[normal_offset] = normal_indices[i]
-					if (has_uv):
-						indices[uv_offset] = uv_indices[i]
-					# if (has_colors):
-					# 	indices[color_offset] = group_polygons[i]
-					index_buffer.append(indices.copy())
-			int_values += " ".join([str(i) for c in index_buffer for i in c])
-			int_values += "</p>"
-			self.writel(S_GEOM, 4, int_values)
-			self.writel(S_GEOM, 3, '</' + prim_type + '>')
+			# calculate offsets and layout of <p> indices			
+			offset = 0
+			if (has_vertex):
+				vertex_offset = offset
+				offset += 1
+			if (has_normals):
+				normal_offset = offset
+				offset += 1
+			if (has_uv):
+				uv_offset = offset
+				offset += 1
+			if (has_colors):
+				color_offset = vertex_offset
+			stride = offset
+			
+			
+			for mat_index, polygons in surface_v_indices.items():
+				
+				# Every renderable mesh must have a material symbol even if no material is assigned in Blender.
+				matref = self.get_material_link_symbol("target")
+				material_bind[mat_index] = matref
+	
+				self.writel(S_GEOM, 3, '<' + prim_type + ' count="' + str(len(polygons)) + '" material="' + matref + '">')  # todo material
+				if (has_vertex):
+					self.writel(S_GEOM, 4, '<input semantic="VERTEX" source="#' + mesh_id + '-vertices" offset="' + str(vertex_offset) + '"/>')
+				if (has_normals):
+					self.writel(S_GEOM, 4, '<input semantic="NORMAL" source="#' + mesh_id + '-normals" offset="' + str(normal_offset) + '"/>')
+				if (has_uv):
+					self.writel(S_GEOM, 4, '<input semantic="TEXCOORD" source="#' + mesh_id + '-texcoord" offset="' + str(uv_offset) + '" set="0"/>')
+				if (has_colors):
+					self.writel(S_GEOM, 4, '<input semantic="COLOR" source="#' + mesh_id + '-colors" offset="' + str(color_offset) + '"/>')
+				
+				# vcount list if not triangulating, as a triangle always has 3 sides no need for an array of 3s
+				if (not triangulated):
+					int_values = "<vcount>"
+					int_values += " ".join([str(len(p)) for p in polygons])
+					int_values += "</vcount>"
+					self.writel(S_GEOM, 4, int_values)
+					
+				# faces
+				int_values = "<p>"
+	
+				index_buffer = []
+				indices = [0 for i in range(stride)]
+				for p in range(0, len(polygons)):
+					group_polygons = polygons[p]
+					normal_indices = None
+					uv_indices = None
+					if has_normals:
+						normal_indices = surface_normal_indices[mat_index][p]
+					if has_uv:
+						uv_indices = surface_uv_indices[mat_index][p]
+					for i in range(0, len(polygons[p])):
+						if (has_vertex):
+							indices[vertex_offset] = group_polygons[i]
+						if (has_normals):
+							indices[normal_offset] = normal_indices[i]
+						if (has_uv):
+							indices[uv_offset] = uv_indices[i]
+						# if (has_colors):
+						# 	indices[color_offset] = group_polygons[i]
+						index_buffer.append(indices.copy())
+				int_values += " ".join([str(i) for c in index_buffer for i in c])
+				int_values += "</p>"
+				self.writel(S_GEOM, 4, int_values)
+				self.writel(S_GEOM, 3, '</' + prim_type + '>')
 		if (convex):
 			self.writel(S_GEOM, 2, '</convex_mesh>')
 		else:
@@ -1467,27 +1479,27 @@ class DaeExporter:
 		self.writel(S_P_MATS, 2, '</technique_common>')
 		self.writel(S_P_MATS, 1, '</physics_material>')
 		
-	def export_physics_models(self, lookup):
+	def export_rigid_body_models(self, lookup):
 		collision_shape_nodes = [node for node in self.valid_nodes if ((node.rigid_body != None) and (node.rigid_body.collision_shape != None))]
 		if (not len(collision_shape_nodes)):
 			return
 		
-		physics_model_lookup = {}
+		physics_rigid_body_lookup = {}
 		self.writel(S_P_MODEL, 0, '<library_physics_models>')
 		for node in collision_shape_nodes:
-			if (not node.data in physics_model_lookup):
+			if (not node.data in physics_rigid_body_lookup):
 				physics_model_id = self.get_node_id(node.data.name + '-model')
-				physics_model_sid= self.get_node_id(node.data.name + '-body')
-				physics_model_lookup[node.data] = (physics_model_id,physics_model_sid)
-				self.export_physics_model(node, physics_model_id, physics_model_sid, lookup)
+				physics_body_sid= self.get_node_id(node.data.name + '-body')
+				physics_rigid_body_lookup[node.data] = {'model_id':physics_model_id,'body_sid':physics_body_sid}
+				self.export_physics_model(node, physics_model_id, physics_body_sid, lookup)
 		self.writel(S_P_MODEL, 0, '</library_physics_models>')
-		return physics_model_lookup
+		return physics_rigid_body_lookup
 	
-	def export_physics_model(self, node, physics_model_id, physics_model_sid, lookup):
+	def export_physics_model(self, node, physics_model_id, physics_body_sid, lookup):
 		self.writel(S_P_MODEL, 1, '<physics_model id="{}">'.format(physics_model_id))
-		self.writel(S_P_MODEL, 2, '<rigid_body sid="{}">'.format(physics_model_sid))
+		self.writel(S_P_MODEL, 2, '<rigid_body sid="{}">'.format(physics_body_sid))
 		self.writel(S_P_MODEL, 3, '<technique_common>')
-		self.writel(S_P_MODEL, 4, '<dynamic>{}</dynamic>'.format(str(node.rigid_body.enabled).lower()))
+		self.writel(S_P_MODEL, 4, '<dynamic>{}</dynamic>'.format(str(node.rigid_body.type == 'ACTIVE').lower()))
 		self.writel(S_P_MODEL, 4, '<mass>{}</mass>'.format(node.rigid_body.mass))
 		self.writel(S_P_MODEL, 4, '<mass_frame>')
 		self.writel(S_P_MODEL, 5, '<translate>0 0 0</translate>')
@@ -1651,12 +1663,12 @@ class DaeExporter:
 		rigid_body_nodes =[node for node in self.valid_nodes if (node.rigid_body != None)]
 		
 		for node in rigid_body_nodes:
-			physics_model = lookup['physics_model'][node.data]
-			sid = self.get_node_id(node.name + '-' + physics_model[0])
-			url = physics_model[0]
+			physics_model = lookup['rigid_body'][node.data]
+			sid = self.get_node_id(node.name + '-' + physics_model['model_id'])
+			url = physics_model['model_id']
 			parent=lookup['nodes'][node]
 			self.writel(S_P_SCENE,2,'<instance_physics_model sid="{}" url="#{}" parent="#{}">'.format(sid,url,parent))
-			rigid_body=physics_model[1]
+			rigid_body=physics_model['body_sid']
 			self.writel(S_P_SCENE,3,'<instance_rigid_body body="{}" target="#{}">'.format(rigid_body,parent))
 			self.writel(S_P_SCENE,4,'<technique_common>')
 			self.writel(S_P_SCENE,5,'<velocity>0 0 0</velocity>')
@@ -1860,12 +1872,17 @@ class DaeExporter:
 				if (not node in self.valid_nodes):
 					continue
 				if (node.data and (node.data in lookup["morph"])):
+					node_id = lookup["nodes"][node]
 					morph_controller = lookup["morph"][node.data]
 					morph_id = morph_controller[0]
 					targets = morph_controller[1]
 					for i in range(1, len(node.data.shape_keys.key_blocks)):
-
-						name = morph_id + "/" + targets[i - 1][0]
+						name = node_id
+						if node.data in lookup["skin_controller"]:
+							name+="/controller/source"
+						else:
+							name+="/morph"
+						name+="/"+ morph_id + "/" + targets[i - 1][0]
 						if (not (name in blend_cache)):
 							blend_cache[name] = []
 
@@ -1906,7 +1923,7 @@ class DaeExporter:
 		different = False
 		if (len(morph_keyframes)):
 			prev_value = morph_keyframes[-1][1];
-			if (abs(prev_value - new_value) > CMP_EPSILON):
+			if (abs(prev_value - new_value) > (CMP_EPSILON/100.0)):
 				different = True
 		else:
 			different = True
@@ -2158,8 +2175,8 @@ class DaeExporter:
 			if (self.config["use_physics"]):
 				physics_material_lookup = self.export_physics_materials()
 				lookup["physics_material"] = physics_material_lookup
-				physics_model_lookup = self.export_physics_models(lookup)
-				lookup["physics_model"] = physics_model_lookup
+				physics_rigid_body_lookup = self.export_rigid_body_models(lookup)
+				lookup["rigid_body"] = physics_rigid_body_lookup
 				self.export_physics_scene(lookup)
 
 			self.export_animations(lookup)
