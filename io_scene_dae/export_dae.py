@@ -1794,6 +1794,7 @@ class DaeExporter:
 		self.writel(S_P_SCENE, 0, '<library_physics_scenes>')
 		self.writel(S_P_SCENE, 1, '<physics_scene id="{}">'.format(self.scene_name + '-physics'))
 		self.writel(S_P_SCENE, 2, '<technique_common>')
+		self.writel(S_P_SCENE, 3, '<gravity>0 0 {}</gravity>'.format(-self.scene.game_settings.physics_gravity))
 		self.writel(S_P_SCENE, 3, '<time_step>{}</time_step>'.format(1.0 / self.scene.game_settings.fps))
 		self.writel(S_P_SCENE, 2, '</technique_common>')
 		self.writel(S_P_SCENE, 2, '<extra>')
