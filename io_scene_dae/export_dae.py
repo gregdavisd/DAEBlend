@@ -1460,12 +1460,9 @@ class DaeExporter:
 					n = n.parent
 
 	def export_physics_materials(self):
-		collision_nodes = [node for node in self.valid_nodes if (node.rigid_body != None)]
-		if (not len(collision_nodes)):
-			return {}
 		physics_materials_lookup = {}
 		self.writel(S_P_MATS, 0, '<library_physics_materials>')
-		for node in collision_nodes:
+		for node in self.physics_nodes:
 			if (not node.data in physics_materials_lookup):
 				physics_material_id = self.get_node_id(node.data.name + '-phys_mat')
 				physics_materials_lookup[node.data] = physics_material_id
@@ -1474,12 +1471,9 @@ class DaeExporter:
 		return physics_materials_lookup
 	
 	def export_game_physics_materials(self):
-		collision_nodes = [node for node in self.valid_nodes if (node.game.physics_type in self.valid_game_types)]
-		if (not len(collision_nodes)):
-			return {}
 		physics_materials_lookup = {}
 		self.writel(S_P_MATS, 0, '<library_physics_materials>')
-		for node in collision_nodes:
+		for node in self.physics_nodes:
 			if (not node.game in physics_materials_lookup):
 				physics_material_id = self.get_node_id(node.name + '-phys_mat')
 				physics_materials_lookup[node.game] = physics_material_id
@@ -1516,13 +1510,9 @@ class DaeExporter:
 		self.writel(S_P_MATS, 1, '</physics_material>')
 			
 	def export_rigid_body_models(self, lookup):
-		collision_shape_nodes = [node for node in self.valid_nodes if ((node.rigid_body != None) and (node.rigid_body.collision_shape != None))]
-		if (not len(collision_shape_nodes)):
-			return
-		
 		physics_rigid_body_lookup = {}
 		self.writel(S_P_MODEL, 0, '<library_physics_models>')
-		for node in collision_shape_nodes:
+		for node in self.physics_nodes:
 			if (not node.data in physics_rigid_body_lookup):
 				physics_model_id = self.get_node_id(node.data.name + '-model')
 				physics_body_sid = self.get_node_id(node.data.name + '-body')
@@ -1532,13 +1522,9 @@ class DaeExporter:
 		return physics_rigid_body_lookup
 	
 	def export_game_rigid_body_models(self, lookup):
-		collision_shape_nodes = [node for node in self.valid_nodes if (node.game.physics_type in self.valid_game_types)]
-		if (not len(collision_shape_nodes)):
-			return
-		
 		physics_rigid_body_lookup = {}
 		self.writel(S_P_MODEL, 0, '<library_physics_models>')
-		for node in collision_shape_nodes:
+		for node in self.physics_nodes:
 			if (not node.game in physics_rigid_body_lookup):
 				physics_model_id = self.get_node_id(node.name + '-model')
 				physics_body_sid = self.get_node_id(node.name + '-body')
@@ -1617,7 +1603,8 @@ class DaeExporter:
 			self.shape_funcs[shape](node, 5, lookup)
 		except:
 			pass
-		self.export_game_collision_margin(node, 5)
+		if node.game.use_collision_bounds:
+			self.export_game_collision_margin(node, 5)
 
 		self.writel(S_P_MODEL, 4, '</shape>')
 		self.writel(S_P_MODEL, 3, '</technique_common>')
@@ -1813,9 +1800,7 @@ class DaeExporter:
 		self.writel(S_P_SCENE, 0, '</library_physics_scenes>')
 				
 	def export_physics_instances(self, lookup):
-		rigid_body_nodes = [node for node in self.valid_nodes if (node.rigid_body != None)]
-		
-		for node in rigid_body_nodes:
+		for node in self.physics_nodes:
 			physics_model = lookup['rigid_body'][node.data]
 			sid = self.get_node_id(node.name + '-' + physics_model['model_id'])
 			url = physics_model['model_id']
@@ -1824,16 +1809,15 @@ class DaeExporter:
 			rigid_body = physics_model['body_sid']
 			self.writel(S_P_SCENE, 3, '<instance_rigid_body body="{}" target="#{}">'.format(rigid_body, parent))
 			self.writel(S_P_SCENE, 4, '<technique_common>')
-			self.writel(S_P_SCENE, 5, '<velocity>0 0 0</velocity>')
+			# self.writel(S_P_SCENE, 5, '<angular_velocity>0 0 0</angular_velocity>')
+			# self.writel(S_P_SCENE, 5, '<velocity>0 0 0</velocity>')
 			self.writel(S_P_SCENE, 5, '<mass>{}</mass>'.format(node.rigid_body.mass))
 			self.writel(S_P_SCENE, 4, '</technique_common>')
 			self.writel(S_P_SCENE, 3, '</instance_rigid_body>')
 			self.writel(S_P_SCENE, 2, '</instance_physics_model>')
 
 	def export_game_physics_instances(self, lookup):
-		rigid_body_nodes = [node for node in self.valid_nodes if (node.game.physics_type in self.valid_game_types)]
-
-		for node in rigid_body_nodes:
+		for node in self.physics_nodes:
 			physics_model = lookup['rigid_body'][node.game]
 			sid = self.get_node_id(node.name + '-' + physics_model['model_id'])
 			url = physics_model['model_id']
@@ -1842,7 +1826,8 @@ class DaeExporter:
 			rigid_body = physics_model['body_sid']
 			self.writel(S_P_SCENE, 3, '<instance_rigid_body body="{}" target="#{}">'.format(rigid_body, parent))
 			self.writel(S_P_SCENE, 4, '<technique_common>')
-			self.writel(S_P_SCENE, 5, '<velocity>0 0 0</velocity>')
+			# self.writel(S_P_SCENE, 5, '<angular_velocity>0 0 0</angular_velocity>')
+			# self.writel(S_P_SCENE, 5, '<velocity>0 0 0</velocity>')
 			self.writel(S_P_SCENE, 5, '<mass>{}</mass>'.format(node.game.mass))
 			self.writel(S_P_SCENE, 4, '</technique_common>')
 			self.writel(S_P_SCENE, 3, '</instance_rigid_body>')
@@ -2356,12 +2341,19 @@ class DaeExporter:
 			
 			if (self.config["use_physics"]):
 				if self.scene.render.engine == 'BLENDER_GAME':
+					self.physics_nodes= [node 
+										for node in self.valid_nodes 
+										if (node.game.physics_type in self.valid_game_types) and
+										(node.game.use_collision_bounds or node.data in lookup['mesh'])]
 					physics_material_lookup = self.export_game_physics_materials()
 					lookup["physics_material"] = physics_material_lookup
 					physics_rigid_body_lookup = self.export_game_rigid_body_models(lookup)
 					lookup["rigid_body"] = physics_rigid_body_lookup
 					self.export_game_physics_scene(lookup)
 				else:
+					self.physics_nodes=[node 
+									for node in self.valid_nodes 
+									if (node.rigid_body and node.rigid_body.collision_shape)]
 					physics_material_lookup = self.export_physics_materials()
 					lookup["physics_material"] = physics_material_lookup
 					physics_rigid_body_lookup = self.export_rigid_body_models(lookup)
