@@ -829,7 +829,7 @@ class DaeExporter:
 			for mat_index, polygons in surface_v_indices.items():
 				
 				# Every renderable mesh must have a material symbol even if no material is assigned in Blender.
-				matref = self.get_material_link_symbol("target")
+				matref = "symbol-"+str(mat_index)
 				material_bind[mat_index] = matref
 	
 				self.writel(S_GEOM, 3, '<' + prim_type + ' count="' + str(len(polygons)) + '" material="' + matref + '">')  # todo material
@@ -1555,7 +1555,6 @@ class DaeExporter:
 		self.export_collision_margin(node, 5)
 
 		self.writel(S_P_MODEL, 4, '</shape>')
-		collision_groups = [str(i) for (i, g) in enumerate(node.rigid_body.collision_groups) if g]
 		self.writel(S_P_MODEL, 3, '</technique_common>')
 		
 		self.writel(S_P_MODEL, 3, '<extra>')
@@ -1568,6 +1567,7 @@ class DaeExporter:
 			self.writel(S_P_MODEL, 6, '<angular_velocity>{}</angular_velocity>'.format(node.rigid_body.deactivate_angular_velocity))
 			self.writel(S_P_MODEL, 6, '<start>{}</start>'.format(str(node.rigid_body.use_start_deactivated).lower()))
 			self.writel(S_P_MODEL, 5, '</deactivation>')
+		collision_groups = [str(i) for (i, g) in enumerate(node.rigid_body.collision_groups) if g]
 		if (len(collision_groups)):
 			self.writel(S_P_MODEL, 5, '<collision_filter_groups>{}</collision_filter_groups>'.format(" ".join(collision_groups)))
 		linear_factor = [1.0, 1.0, 1.0]
@@ -1614,9 +1614,10 @@ class DaeExporter:
 		self.writel(S_P_MODEL, 5, '<linear_damping>{}</linear_damping>'.format(node.game.damping))
 		self.writel(S_P_MODEL, 5, '<angular_damping>{}</angular_damping>'.format(node.game.rotation_damping))
 		self.writel(S_P_MODEL, 5, '<deactivation use="{}"/>'.format(str(node.game.use_sleep).lower()))
-		collision_groups = [str(i) for (i, g) in enumerate(node.game.collision_mask) if g]
-		if (len(collision_groups)):
-			self.writel(S_P_MODEL, 5, '<collision_filter_groups>{}</collision_filter_groups>'.format(" ".join(collision_groups)))
+		collision_groups = [str(i) for (i, g) in enumerate(node.game.collision_group) if g]
+		collision_mask = [str(i) for (i, g) in enumerate(node.game.collision_mask) if g]
+		self.writel(S_P_MODEL, 5, '<collision_filter_groups>{}</collision_filter_groups>'.format(" ".join(collision_groups)))
+		self.writel(S_P_MODEL, 5, '<collision_filter_mask>{}</collision_filter_mask>'.format(" ".join(collision_mask)))
 		linear_factor = [1.0, 1.0, 1.0]
 		angular_factor = [1.0, 1.0, 1.0]
 		if node.game.lock_location_x:
