@@ -70,7 +70,7 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
                    ('MESH', "Mesh", ""),
                    ('CURVE', "Curve", ""),
                    ),
-            default={'EMPTY', 'CAMERA', 'LAMP', 'ARMATURE', 'MESH','CURVE'},
+            default={'EMPTY', 'CAMERA', 'LAMP', 'ARMATURE', 'MESH', 'CURVE'},
             )
 
     use_export_selected = BoolProperty(
@@ -140,10 +140,17 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
         default=True,
         )
 
-
+    compatibility = EnumProperty(
+        name="Compatibility",
+        items=(('NONE', "Collada 1.5", "Default Collada 1.5 with no workarounds"),
+            ('THREE', "Three.js", "Three.js compatibility")),
+        description="Alter output to workaround bugs and differences for importers",
+        default='NONE',
+        )
+    
     @property
     def check_extension(self):
-        return True#return self.batch_mode == 'OFF'
+        return True  # return self.batch_mode == 'OFF'
 
     def check(self, context):
         return True

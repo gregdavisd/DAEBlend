@@ -63,7 +63,7 @@ S_P_SCENE = 13
 S_ANIM = 14
 S_ANIM_CLIPS = 15
 
-CMP_EPSILON = 0.01
+CMP_EPSILON = 0.001
 
 # number of times to recalculate frame to try and settle IK constraints into final
 # position
@@ -167,7 +167,11 @@ class DaeExporter:
 		
 		# the file path should be surrounded by <ref> tags
 		
-		self.writel(S_IMGS, 2, '<init_from><ref>' + imgpath + '</ref></init_from>')
+		if not self.surface_texture:
+			self.writel(S_IMGS, 2, '<init_from><ref>' + imgpath + '</ref></init_from>')
+		else:
+			self.writel(S_IMGS, 2, '<init_from>' + imgpath + '</init_from>')
+			
 		self.writel(S_IMGS, 1, '</image>')
 
 	def export_effect(self, material, effect_id, image_lookup):
@@ -205,10 +209,22 @@ class DaeExporter:
 				continue
 			done_images.add(imgid)
 			
+			if self.surface_texture:
+				surface_sid = imgid + "-surface"
+				self.writel(S_FX, 3, '<newparam sid="' + surface_sid + '">')
+				self.writel(S_FX, 4, '<surface>')
+				self.writel(S_FX, 5, '<init_from>{}</init_from>'.format(imgid))
+				self.writel(S_FX, 4, '</surface>')
+				self.writel(S_FX, 3, '</newparam>')
+				
 			sampler_sid = imgid + "-sampler"
 			self.writel(S_FX, 3, '<newparam sid="' + sampler_sid + '">')
 			self.writel(S_FX, 4, '<sampler2D>')
-			self.writel(S_FX, 5, '<instance_image url="{}"/>'.format(imgid))
+			if not self.surface_texture:
+				self.writel(S_FX, 5, '<instance_image url="{}"/>'.format(imgid))
+			else:
+				self.writel(S_FX, 5, '<source>{}</source>'.format(surface_sid))
+				
 			self.writel(S_FX, 4, '</sampler2D>')
 			self.writel(S_FX, 3, '</newparam>')
 			sampler_table[i] = sampler_sid
@@ -634,15 +650,15 @@ class DaeExporter:
 		skin_controller_lookup = {}
 		
 		for node in meshes:
-			if not node.data in skin_controller_lookup.keys():
+			if not node in skin_controller_lookup.keys():
 				armatures = [mod for mod in node.modifiers.values() if (mod.type == "ARMATURE") and mod.show_render and mod.use_vertex_groups]
 				for armature in armatures:
-					skin_id = self.get_node_id(node.data.name + "-" + armature.object.name + "-skin")
+					skin_id = self.get_node_id(node.name + "-" + armature.object.name + "-skin")
 					lu = {"skin":skin_id, "skeleton":armature.object.name}
 					if (node.data in skin_controller_lookup):
-						skin_controller_lookup[node.data].append(lu)
+						skin_controller_lookup[node].append(lu)
 					else:
-						skin_controller_lookup[node.data] = [lu]
+						skin_controller_lookup[node] = [lu]
 					if (node.data in morph_lookup):
 						mesh_id = morph_lookup[node.data][0]
 					else:
@@ -651,15 +667,21 @@ class DaeExporter:
 		return skin_controller_lookup	
 		
 	def export_skin_controller(self, node, armature, mesh_id, skin_id):
-		group_names = [group.name for group in node.vertex_groups.values()]
-		bones = [armature.data.bones[name] for name in group_names if name in armature.data.bones.keys()]
+		if not self.overstuff_bones:
+			group_names = [group.name for group in node.vertex_groups.values() if group.name in armature.data.bones.keys()]
+		else:
+			# put every bone from the armature into the skin because reasons
+			
+			group_names = [group for group in armature.data.bones.keys()]
+		
+		bones = [armature.data.bones[name] for name in group_names]
 		pose_matrices = [(armature.matrix_world * bone.matrix_local).inverted() for bone in bones]
 		weight_counts = [len(v.groups) for v in node.data.vertices]
 		weights = list(set([group.weight for v in node.data.vertices for group in v.groups]))
 		weights_index = {k:v for (v, k) in enumerate(weights)}
 		bone_weights = [i for w in
 					 [
-					 	[g.group, weights_index[g.weight]] 
+					 	[group_names.index(node.vertex_groups[g.group].name), weights_index[g.weight]] 
 					 		for v in node.data.vertices for g in v.groups
 					 ] 
 					for i in w]
@@ -829,7 +851,7 @@ class DaeExporter:
 			for mat_index, polygons in surface_v_indices.items():
 				
 				# Every renderable mesh must have a material symbol even if no material is assigned in Blender.
-				matref = "symbol-"+str(mat_index)
+				matref = "symbol-" + str(mat_index)
 				material_bind[mat_index] = matref
 	
 				self.writel(S_GEOM, 3, '<' + prim_type + ' count="' + str(len(polygons)) + '" material="' + matref + '">')  # todo material
@@ -1288,9 +1310,9 @@ class DaeExporter:
 			lookup["Armature_node"] = node
 			self.export_armature_node(node, il, lookup, nodes_lookup)
 		elif (node.data != None):
-			if (node.data in lookup["skin_controller"]):
+			if (node in lookup["skin_controller"]):
 				count = 0
-				for skin_lookup in lookup["skin_controller"][node.data]: 
+				for skin_lookup in lookup["skin_controller"][node]: 
 					skin_id = skin_lookup['skin']
 					skeleton = skin_lookup['skeleton']
 					skin_sid = "skin" + str(count)
@@ -1650,26 +1672,26 @@ class DaeExporter:
 	
 	def export_collision_margin(self, node, il):
 		if (node.rigid_body.use_margin or node.rigid_body.collision_shape == 'CONE'):
-			self.writel(S_P_MODEL, il,'<extra>')
-			self.writel(S_P_MODEL, il+1, '<technique profile="bullet">')
+			self.writel(S_P_MODEL, il, '<extra>')
+			self.writel(S_P_MODEL, il + 1, '<technique profile="bullet">')
 			self.writel(
-					S_P_MODEL, il+2,
+					S_P_MODEL, il + 2,
 					'<collision_margin>{}</collision_margin>'
 					.format(node.rigid_body.collision_margin))
-			self.writel(S_P_MODEL, il+1, '</technique>')
-			self.writel(S_P_MODEL, il,'</extra>')
+			self.writel(S_P_MODEL, il + 1, '</technique>')
+			self.writel(S_P_MODEL, il, '</extra>')
 			
 	
 	def export_game_collision_margin(self, node, il):
-		self.writel(S_P_MODEL, il,'<extra>')
-		self.writel(S_P_MODEL, il+1, '<technique profile="bullet">')
+		self.writel(S_P_MODEL, il, '<extra>')
+		self.writel(S_P_MODEL, il + 1, '<technique profile="bullet">')
 		self.writel(
-				S_P_MODEL, il+2,
+				S_P_MODEL, il + 2,
 				'<collision_margin>{}</collision_margin>'
 				.format(node.game.collision_margin)
 				)	
-		self.writel(S_P_MODEL, il+1, '</technique>')
-		self.writel(S_P_MODEL, il,'</extra>')
+		self.writel(S_P_MODEL, il + 1, '</technique>')
+		self.writel(S_P_MODEL, il, '</extra>')
 		
 	def export_box_shape(self, node, il, lookup):
 		dimensions = self.get_node_dimensions(node)
@@ -2035,7 +2057,7 @@ class DaeExporter:
 					targets = morph_controller[1]
 					for i in range(1, len(node.data.shape_keys.key_blocks)):
 						name = node_id
-						if node.data in lookup["skin_controller"]:
+						if node in lookup["skin_controller"]:
 							name += "/controller/source"
 						else:
 							name += "/morph"
@@ -2342,7 +2364,7 @@ class DaeExporter:
 			
 			if (self.config["use_physics"]):
 				if self.scene.render.engine == 'BLENDER_GAME':
-					self.physics_nodes= [node 
+					self.physics_nodes = [node 
 										for node in self.valid_nodes 
 										if (node.game.physics_type in self.valid_game_types) and
 										(node.game.use_collision_bounds or node.data in lookup['mesh'])]
@@ -2352,7 +2374,7 @@ class DaeExporter:
 					lookup["rigid_body"] = physics_rigid_body_lookup
 					self.export_game_physics_scene(lookup)
 				else:
-					self.physics_nodes=[node 
+					self.physics_nodes = [node 
 									for node in self.valid_nodes 
 									if (node.rigid_body and node.rigid_body.collision_shape)]
 					physics_material_lookup = self.export_physics_materials()
@@ -2428,6 +2450,14 @@ class DaeExporter:
 		self.meshes_to_clear = []
 		self.node_names = {}
 		self.transform_matrix_scale = self.config["transform_type"] == 'MATRIX_SCALE'
+		
+		if self.config["compatibility"] == 'NONE':
+			self.overstuff_bones = False
+			self.surface_texture = False
+		elif self.config["compatibility"] == 'THREE':
+			self.overstuff_bones = True
+			self.surface_texture = True
+			
 
 def save(operator, context,
 	filepath="",
