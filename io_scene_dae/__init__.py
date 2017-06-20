@@ -143,7 +143,8 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
     compatibility = EnumProperty(
         name="Compatibility",
         items=(('NONE', "Collada 1.5", "Default Collada 1.5 with no workarounds"),
-            ('THREE', "Three.js", "Three.js compatibility")),
+            ('THREE', "Three.js", "Three.js compatibility"),
+            ('ASSIMP', "ASSIMP", "ASSIMP 3.3.1 compatibility")),
         description="Alter output to workaround bugs and differences for importers",
         default='NONE',
         )

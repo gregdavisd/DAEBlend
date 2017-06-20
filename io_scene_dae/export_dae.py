@@ -221,7 +221,11 @@ class DaeExporter:
 			self.writel(S_FX, 3, '<newparam sid="' + sampler_sid + '">')
 			self.writel(S_FX, 4, '<sampler2D>')
 			if not self.surface_texture:
-				self.writel(S_FX, 5, '<instance_image url="{}"/>'.format(imgid))
+				if not self.pound_some_more:
+					more_pound = ""
+				else:
+					more_pound = "#"
+				self.writel(S_FX, 5, '<instance_image url="{}"/>'.format(more_pound + imgid))
 			else:
 				self.writel(S_FX, 5, '<source>{}</source>'.format(surface_sid))
 				
@@ -2451,12 +2455,17 @@ class DaeExporter:
 		self.node_names = {}
 		self.transform_matrix_scale = self.config["transform_type"] == 'MATRIX_SCALE'
 		
-		if self.config["compatibility"] == 'NONE':
-			self.overstuff_bones = False
-			self.surface_texture = False
-		elif self.config["compatibility"] == 'THREE':
+		self.overstuff_bones = False
+		self.surface_texture = False
+		self.pound_some_more = False
+			
+		if self.config["compatibility"] == 'THREE':
 			self.overstuff_bones = True
 			self.surface_texture = True
+		elif self.config["compatibility"] == 'ASSIMP':
+			self.pound_some_more = True
+			self.overstuff_bones = True
+			
 			
 
 def save(operator, context,
