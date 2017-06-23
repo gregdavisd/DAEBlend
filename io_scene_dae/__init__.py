@@ -144,7 +144,8 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
         name="Compatibility",
         items=(('NONE', "Collada 1.5", "Default Collada 1.5 with no workarounds"),
             ('THREE', "Three.js", "Three.js compatibility"),
-            ('ASSIMP', "ASSIMP", "ASSIMP 3.3.1 compatibility")),
+            ('ASSIMP', "ASSIMP", "ASSIMP 3.3.1 compatibility"),
+            ('GODOT', "Better Collada/Godot", "Godot game engine compatibility")),
         description="Alter output to workaround bugs and differences for importers",
         default='NONE',
         )

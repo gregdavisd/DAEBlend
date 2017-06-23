@@ -516,7 +516,6 @@ class DaeExporter:
 			filter(lambda obj :	obj.type == "MESH" or obj.type == "CURVE", 	self.valid_nodes)
 		);
 			
-		triangulate = self.config["use_triangles"]
 		geometry_lookup = {}
 		convex_geometry_lookup = {}
 		geometry_morphs = {}
@@ -528,12 +527,12 @@ class DaeExporter:
 			
 			# generate mesh from node
 			
-			mesh = self.node_to_mesh(node, triangulate)
+			mesh = self.node_to_mesh(node, self.triangulate)
 			
 			# export the mesh
 			if (mesh):
 				mesh_id = self.get_node_id(node.data.name + "-mesh")
-				material_bind = self.export_mesh(mesh, mesh_id, node.data.name, triangulate)
+				material_bind = self.export_mesh(mesh, mesh_id, node.data.name, self.triangulate)
 				geometry_lookup[node.data] = mesh_id
 				if (len(material_bind)):
 					material_bind_lookup[node.data] = material_bind
@@ -544,7 +543,7 @@ class DaeExporter:
 					convex_mesh = self.mesh_to_convex_hull(mesh)
 					if (convex_mesh):
 						convex_mesh_id = mesh_id + "-convex"
-						material_bind = self.export_mesh(convex_mesh, convex_mesh_id, node.data.name, triangulate, True)
+						material_bind = self.export_mesh(convex_mesh, convex_mesh_id, node.data.name, self.triangulate, True)
 						convex_geometry_lookup[node.data] = convex_mesh_id
 							
 				# export morphs from shape keys
@@ -566,7 +565,6 @@ class DaeExporter:
 	
 	def export_mesh_morphs(self, node, mesh_id):
 		mesh = node.data
-		triangulate = self.config["use_triangles"]
 
 		if (mesh.shape_keys != None and len(mesh.shape_keys.key_blocks)):
 			values = []
@@ -592,8 +590,8 @@ class DaeExporter:
 				mesh.update()
 				morph_id = self.get_node_id(mesh_id + "-morph-" + shape.name)
 				morph_targets.append([morph_id, values[k - 1]])
-				export_mesh = self.node_to_mesh(node, triangulate)
-				self.export_mesh(export_mesh, morph_id, morph_id, triangulate, morph=True)
+				export_mesh = self.node_to_mesh(node, self.triangulate)
+				self.export_mesh(export_mesh, morph_id, morph_id, self.triangulate, morph=True)
 				shape.value = values[k - 1]
 			
 			node.show_only_shape_key = scene_show_only_shape_key
@@ -659,6 +657,9 @@ class DaeExporter:
 				for armature in armatures:
 					skin_id = self.get_node_id(node.name + "-" + armature.object.name + "-skin")
 					lu = {"skin":skin_id, "skeleton":armature.object.name}
+					if self.skeleton_at_first_bone:
+						if len(armature.object.data.bones):
+							lu["skeleton"] = armature.object.data.bones[0].name
 					if (node.data in skin_controller_lookup):
 						skin_controller_lookup[node].append(lu)
 					else:
@@ -982,8 +983,6 @@ class DaeExporter:
 		bpy.context.scene.update();
 							
 	def export_armature_node(self, node, il, lookup, nodes_lookup):
-		
-		# Export the rig in rest mode, this ensures that geometry attached to bones are also at the rest position
 		
 		parenting_map = self.get_armature_children_of_bones(node)
 		self.skeletons.append(node)
@@ -1310,8 +1309,6 @@ class DaeExporter:
 			self.writel(S_NODES, il, t)
 
 		if (node.type == "ARMATURE"):
-			lookup["Armature"] = node_id
-			lookup["Armature_node"] = node
 			self.export_armature_node(node, il, lookup, nodes_lookup)
 		elif (node.data != None):
 			if (node in lookup["skin_controller"]):
@@ -1862,26 +1859,20 @@ class DaeExporter:
 		
 	def export_scene(self, lookup):
 
-		self.save_scene_pose()
-		self.rest_scene()
+		nodes_lookup = {}
+				
+		self.writel(S_NODES, 0, '<library_visual_scenes>')
+		self.writel(S_NODES, 1, '<visual_scene id="' + self.scene_name + '" name="' + self.scene_name + '">')
+
+		for obj in self.valid_nodes:
+			if (obj.parent == None):
+				self.export_node(obj, 2, lookup, nodes_lookup)
+
+		self.writel(S_NODES, 1, '</visual_scene>')
+		self.writel(S_NODES, 0, '</library_visual_scenes>')
+		return nodes_lookup
 		
-		try:
-			nodes_lookup = {}
-					
-			self.writel(S_NODES, 0, '<library_visual_scenes>')
-			self.writel(S_NODES, 1, '<visual_scene id="' + self.scene_name + '" name="' + self.scene_name + '">')
-	
-			for obj in self.valid_nodes:
-				if (obj.parent == None):
-					self.export_node(obj, 2, lookup, nodes_lookup)
-	
-			self.writel(S_NODES, 1, '</visual_scene>')
-			self.writel(S_NODES, 0, '</library_visual_scenes>')
-			return nodes_lookup
-		
-		finally:
-			self.restore_scene_pose()
-	
+
 	def export_asset(self):
 		self.writel(S_ASSET, 0, '<asset>')
 		self.writel(S_ASSET, 1, '<contributor>')
@@ -1958,8 +1949,9 @@ class DaeExporter:
 			anim_id = target + "-anim"
 		else:
 			anim_id = action_name + "-" + target + "-anim"
-			
-		self.writel(S_ANIM, 1, '<animation id="' + anim_id + '">')
+		
+		if not self.multichannel_single_clip:	
+			self.writel(S_ANIM, 1, '<animation id="' + anim_id + '">')
 
 		source_frames = " ".join([str(k[0]) for k in keys])
 		source_matrix = " ".join([strmtx(k[1]['matrix']) for k in keys])
@@ -2027,7 +2019,8 @@ class DaeExporter:
 		self.writel(S_ANIM, 2, '<channel source="#' + anim_id + '-matrix-sampler" target="' + target + '/transform"/>')
 		if (self.transform_matrix_scale):
 			self.writel(S_ANIM, 2, '<channel source="#' + anim_id + '-scale-sampler" target="' + target + '/scale"/>')
-		self.writel(S_ANIM, 1, '</animation>')
+		if not self.multichannel_single_clip:	
+			self.writel(S_ANIM, 1, '</animation>')
 
 		return anim_id
 
@@ -2227,10 +2220,16 @@ class DaeExporter:
 	def export_timeline(self, action_name, start, end, lookup):
 		xform_cache, blend_cache = self.get_animation_transforms(start, end, lookup)
 		tcn = []
+		if self.multichannel_single_clip:
+			animation_id=action_name + '-anim'	
+			self.writel(S_ANIM, 1, '<animation id="' + animation_id + '">')
 		for node_id, cache in xform_cache.items():
 			tcn.append(self.export_animation_xforms(node_id, action_name, cache))
 		for target_id, cache in blend_cache.items():
 			tcn.append(self.export_animation_blends(target_id, action_name, cache))
+		if self.multichannel_single_clip:
+			self.writel(S_ANIM, 1, '</animation>')
+			tcn = [animation_id]
 		self.export_animation_clip(action_name, start, end, tcn)
 
 	def unmute_NLA_object(self, node):
@@ -2323,28 +2322,33 @@ class DaeExporter:
 		self.meshes_to_clear = []
 
 	def export(self):
+		
+		self.writel(S_GEOM, 0, '<library_geometries>')
+		self.writel(S_CONT, 0, '<library_controllers>')
+		self.writel(S_CAMS, 0, '<library_cameras>')
+		self.writel(S_LAMPS, 0, '<library_lights>')
+		self.writel(S_IMGS, 0, '<library_images>')
+		self.writel(S_MATS, 0, '<library_materials>')
+		self.writel(S_FX, 0, '<library_effects>')
+
+		self.get_valid_nodes()
+		self.valid_game_types = ['CHARACTER', 'SENSOR', 'RIGID_BODY', 'DYNAMIC', 'STATIC']
+		self.shape_funcs = {
+			'BOX': self.export_box_shape,
+			'SPHERE': self.export_sphere_shape,
+			'CAPSULE': self.export_capsule_shape,
+			'CYLINDER': self.export_cylinder_shape,
+			'CONE': self.export_cone_shape,
+			'CONVEX_HULL': self.export_convex_hull_shape,
+			'MESH': self.export_mesh_shape,
+			'TRIANGLE_MESH': self.export_mesh_shape}
+
+		self.skeletons = []
+
+		self.save_scene_pose()
+		self.rest_scene()
+		
 		try:
-			self.writel(S_GEOM, 0, '<library_geometries>')
-			self.writel(S_CONT, 0, '<library_controllers>')
-			self.writel(S_CAMS, 0, '<library_cameras>')
-			self.writel(S_LAMPS, 0, '<library_lights>')
-			self.writel(S_IMGS, 0, '<library_images>')
-			self.writel(S_MATS, 0, '<library_materials>')
-			self.writel(S_FX, 0, '<library_effects>')
-
-			self.get_valid_nodes()
-			self.valid_game_types = ['CHARACTER', 'SENSOR', 'RIGID_BODY', 'DYNAMIC', 'STATIC']
-			self.shape_funcs = {
-				'BOX': self.export_box_shape,
-				'SPHERE': self.export_sphere_shape,
-				'CAPSULE': self.export_capsule_shape,
-				'CYLINDER': self.export_cylinder_shape,
-				'CONE': self.export_cone_shape,
-				'CONVEX_HULL': self.export_convex_hull_shape,
-				'MESH': self.export_mesh_shape,
-				'TRIANGLE_MESH': self.export_mesh_shape}
-
-			self.skeletons = []
 			self.export_asset()
 			material_lookup = self.export_materials()
 			mesh_lookup, convex_mesh_lookup, geometry_morphs, material_bind_lookup = self.export_meshes()
@@ -2386,7 +2390,11 @@ class DaeExporter:
 					physics_rigid_body_lookup = self.export_rigid_body_models(lookup)
 					lookup["rigid_body"] = physics_rigid_body_lookup
 					self.export_physics_scene(lookup)
+		finally:
+			self.restore_scene_pose()
+			self.remove_export_meshes()
 
+		try:
 			self.export_animations(lookup)
 	
 			self.writel(S_GEOM, 0, '</library_geometries>')
@@ -2458,13 +2466,19 @@ class DaeExporter:
 		self.overstuff_bones = False
 		self.surface_texture = False
 		self.pound_some_more = False
-			
+		self.triangulate = self.config["use_triangles"]
+		self.skeleton_at_first_bone = False
+		self.multichannel_single_clip = False
+		
 		if self.config["compatibility"] == 'THREE':
 			self.overstuff_bones = True
 			self.surface_texture = True
 		elif self.config["compatibility"] == 'ASSIMP':
 			self.pound_some_more = True
 			self.overstuff_bones = True
+		elif self.config["compatibility"] == 'GODOT':
+			self.surface_texture = True
+			self.skeleton_at_first_bone = True
 			
 			
 
