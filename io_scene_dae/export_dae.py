@@ -350,16 +350,13 @@ class DaeExporter:
 		
 		calc_tangents = self.always_tangent
 		if not calc_tangents and self.use_tangents:
-			if not self.always_tangent:
-				bump_texture = None
-				try:
-					instances = [n for n in self.valid_nodes if n.data == node.data]
-					bump_texture = [tex_slot for i in instances for mat_slot in i.material_slots if mat_slot.material for tex_slot in mat_slot.material.texture_slots if tex_slot and tex_slot.use_map_normal ]
-				except:
-					pass
-				calc_tangents = len(bump_texture) > 0
-			else:
-				calc_tangents = True
+			bump_texture = None
+			try:
+				instances = [n for n in self.valid_nodes if n.data == node.data]
+				bump_texture = [tex_slot for i in instances for mat_slot in i.material_slots if mat_slot.material for tex_slot in mat_slot.material.texture_slots if tex_slot and tex_slot.use_map_normal ]
+			except:
+				pass
+			calc_tangents = bump_texture and len(bump_texture) > 0
 		
 		if calc_tangents:
 			mesh.calc_tangents()
