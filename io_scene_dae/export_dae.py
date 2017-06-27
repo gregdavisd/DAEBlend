@@ -331,8 +331,7 @@ class DaeExporter:
 				bpy.data.meshes.remove(mesh)
 			return False
 
-		# mesh.calc_normals_split();
-		
+				
 		# force triangulation if the mesh has polygons with more than 4 sides
 		force_triangluation = False
 		if not triangulate:
@@ -347,31 +346,33 @@ class DaeExporter:
 			bmesh.ops.triangulate(bm, faces=bm.faces)
 			bm.to_mesh(mesh)
 			bm.free()
-			# mesh.calc_normals_split();
 			mesh.update(calc_tessface=True)
 		
+		calc_tangents = self.always_tangent
+		if not calc_tangents and self.use_tangents:
+			if not self.always_tangent:
+				bump_texture = None
+				try:
+					instances = [n for n in self.valid_nodes if n.data == node.data]
+					bump_texture = [tex_slot for i in instances for mat_slot in i.material_slots if mat_slot.material for tex_slot in mat_slot.material.texture_slots if tex_slot and tex_slot.use_map_normal ]
+				except:
+					pass
+				calc_tangents = len(bump_texture) > 0
+			else:
+				calc_tangents = True
+		
+		if calc_tangents:
+			mesh.calc_tangents()
+			
 		if (mesh != node.data):
 			self.meshes_to_clear.append(mesh)		
 		return mesh
-		
-	def calculate_tangents(self, mesh):
-		use_tangents = False
-		if (use_tangents and len(mesh.uv_textures)):
-			try:
-				mesh.calc_tangents()
-				return True 
-			except:
-				mesh.calc_normals_split()
-				return False
-		else:
-			mesh.calc_normals_split()
-			return False
 
 	def average_color(self, color, count):
 		if count != 0:
-			return Color(color / count)
+			return Color(color / count).freeze()
 		else:
-			return Color(color)
+			return Color(color).freeze()
 		
 	def get_mesh_surfaces(self, mesh):
 		# Turn the mesh into buffers and index buffers, polygons are grouped by material index
@@ -393,14 +394,34 @@ class DaeExporter:
 		
 		if (not ((len(normals) == 1) and (normals[0].length < 0.1))):
 			normals_map = {k:v for (v, k) in enumerate(normals)}
-			# convert dictionary of loop vertices to a dictionary of normal indices
 			surface_normal_indices = {g:s for (g, s) in 
 									zip(loop_vertices.keys(), [[[normals_map[mesh.vertices[v.vertex_index].normal.freeze()] for v in p] for p in g] for g in loop_vertices.values()])}
 		else:
-			# if no normals on the mesh then the normals list will be just one zero vector
 			normals = []
 			surface_normal_indices = {}
 		
+		surface_tangent_indices = {}
+		tangents = []
+		if self.use_tangents:
+			tangents = list(set([ml.tangent.freeze() for g in loop_vertices.values() for p in g for ml in p]))
+			if (not ((len(tangents) == 1) and (tangents[0].length < 0.1))):
+				tangents_map = {k:v for (v, k) in enumerate(tangents)}
+				surface_tangent_indices = {g:s for (g, s) in 
+										zip(loop_vertices.keys(), [[[tangents_map[v.tangent.freeze()] for v in p] for p in g] for g in loop_vertices.values()])}
+			else:
+				tangents = []
+				
+		surface_bitangent_indices = {}
+		bitangents = []
+		if self.use_tangents:
+			bitangents = list(set([ml.bitangent.freeze() for g in loop_vertices.values() for p in g for ml in p]))
+			if (not ((len(bitangents) == 1) and (bitangents[0].length < 0.1))):
+				bitangents_map = {k:v for (v, k) in enumerate(bitangents)}
+				surface_bitangent_indices = {g:s for (g, s) in 
+										zip(loop_vertices.keys(), [[[bitangents_map[v.bitangent.freeze()] for v in p] for p in g] for g in loop_vertices.values()])}
+			else:
+				bitangents = []
+				
 		# get uv's
 		if (mesh.uv_layers != None) and (mesh.uv_layers.active != None):
 			uv_layer = mesh.uv_layers.active.data
@@ -421,6 +442,7 @@ class DaeExporter:
 										[[[uv_map[uv_layer[v.index].uv.freeze()] for v in p] for p in g] for g in loop_vertices.values()])}
 
 
+		surface_color_indices = {}
 		if (mesh.vertex_colors):
 			# Blender doesn't have colors per vertex instead color per polygon loop vertex. 
 			# So guess vertex colors by averaging every color used for each vertex.
@@ -431,17 +453,31 @@ class DaeExporter:
 				color_buckets[loop_vertex.vertex_index][1] += Vector(mesh.vertex_colors.active.data[loop_vertex.index].color)
 				
 			colors = [self.average_color(color, count) for (count, color) in color_buckets if count != 0]
+			opt_colors = list(set(colors))
+			color_map = {k:v for (v, k) in enumerate(opt_colors)}
+			surface_color_indices = {g:s for (g, s) in 
+				zip(loop_vertices.keys(),
+							[[[color_map[colors[v.vertex_index]] for v in p] for p in g] for g in loop_vertices.values()])}
+			colors = opt_colors
 		else:
 			colors = []
 			
+		# Pools of deduplicated values:
 		# vertices = array of xyz point tuples
+		# colors = array of r,g,b color tuples 
 		# normals = array of xyz vector tuples 
 		# uv = array of uv point tuples
-		# colors = array of r,g,b color tuples associated with vertices array
-		# surface_v_indices = Key: is the material slot index for the group of polygons, Values: is a list of integer vertex indices (into vertices array)
-		# surface_normal_indices =  Key: is the material slot index for the group of polygons,Values: is a list of integer normal indices (into normals array)
-		# surface_uv_indices = Key: is the material slot index for the group of polygons,Values: is a list of integer uv indices (into uv array)
-		return vertices, normals, uv, colors, surface_v_indices, surface_normal_indices, surface_uv_indices
+		# tangents = array of xyz tangent tuples
+		# bitangets = array of xyz bitangent tuples
+		#
+		# Polygon vertex index data
+		# surface_v_indices = [material groups][polygons][index into vertices[]]
+		# surface_color_indices = [material groups][polygons][index into colors[]]
+		# surface_normal_indices =  [material groups][polygons][index into normals{]]
+		# surface_uv_indices = [material groups][polygons][index into uv]
+		# surface_tangent_indices = [material groups][polygons][index into tangents[]]
+		# surface_bitangents_indices = [material groups][polygons][index into bitangents[]]
+		return vertices, colors, normals, uv, tangents, bitangents, surface_v_indices, surface_color_indices, surface_normal_indices, surface_uv_indices, surface_tangent_indices, surface_bitangent_indices
 	
 	def get_polygon_groups(self, mesh):
 		# get a dictionary of polygons with loop vertices grouped by material
@@ -748,12 +784,14 @@ class DaeExporter:
 
 	def export_mesh(self, mesh, mesh_id, mesh_name, triangulated, convex=False, morph=False):
 
-		vertices, normals, uv, colors, surface_v_indices, surface_normal_indices, surface_uv_indices = self.get_mesh_surfaces(mesh)
+		vertices, colors, normals, uv, tangents, bitangents, surface_v_indices, surface_color_indices, surface_normal_indices, surface_uv_indices, surface_tangent_indices, surface_bitangent_indices = self.get_mesh_surfaces(mesh)
 		
 		has_vertex = len(vertices) > 0	
 		has_normals = len(normals) > 0
 		has_uv = len(uv) > 0	
 		has_colors = has_vertex and len(colors) > 0
+		has_tangents = len(tangents) > 0
+		has_bitangents = has_normals and has_tangents and (len(bitangents) > 0)
 		
 		self.writel(S_GEOM, 1, '<geometry id="' + mesh_id + '" name="' + mesh_name + '">')
 		if (convex):
@@ -762,7 +800,7 @@ class DaeExporter:
 			self.writel(S_GEOM, 2, '<mesh>')
 
 		# Vertex Array
-		if (has_vertex):
+		if has_vertex:
 			self.writel(S_GEOM, 3, '<source id="' + mesh_id + '-positions">')
 			float_values = " ".join([str(c) for v in [[v.x, v.y, v.z] for v in vertices] for c in v])
 			self.writel(S_GEOM, 4, '<float_array id="' + mesh_id + '-positions-array" count="' + str(len(vertices) * 3) + '">' + float_values + '</float_array>')
@@ -776,7 +814,7 @@ class DaeExporter:
 			self.writel(S_GEOM, 3, '</source>')
 
 		# Normal Array
-		if (has_normals):
+		if has_normals:
 			self.writel(S_GEOM, 3, '<source id="' + mesh_id + '-normals">')
 			float_values = " ".join([str(c) for v in [[v.x, v.y, v.z] for v in normals] for c in v])
 			self.writel(S_GEOM, 4, '<float_array id="' + mesh_id + '-normals-array" count="' + str(len(normals) * 3) + '">' + float_values + '</float_array>')
@@ -790,7 +828,7 @@ class DaeExporter:
 			self.writel(S_GEOM, 3, '</source>')
 
 		# UV Arrays
-		if (has_uv):
+		if has_uv:
 			self.writel(S_GEOM, 3, '<source id="' + mesh_id + '-texcoord">')
 			float_values = " ".join([str(c) for v in [[v.x, v.y] for v in uv] for c in v])
 			self.writel(S_GEOM, 4, '<float_array id="' + mesh_id + '-texcoord-array" count="' + str(len(uv) * 2) + '">' + float_values + '</float_array>')
@@ -804,7 +842,7 @@ class DaeExporter:
 
 		# Color Arrays
 
-		if (has_colors):
+		if has_colors:
 			self.writel(S_GEOM, 3, '<source id="' + mesh_id + '-colors">')
 			float_values = " ".join([str(c) for v in [[v.r, v.g, v.b] for v in colors] for c in v])
 			self.writel(S_GEOM, 4, '<float_array id="' + mesh_id + '-colors-array" count="' + str(len(colors) * 3) + '">' + float_values + '</float_array>')
@@ -817,6 +855,50 @@ class DaeExporter:
 			self.writel(S_GEOM, 4, '</technique_common>')
 			self.writel(S_GEOM, 3, '</source>')
 
+		if has_tangents:
+			self.writel(
+				S_GEOM, 3, "<source id=\"{}-tangents\">".format(mesh_id))
+			float_values = ""
+			for v in tangents:
+				float_values += " {} {} {}".format(
+					v.x, v.y, v.z)
+			self.writel(
+				S_GEOM, 4, "<float_array id=\"{}-tangents-array\" "
+				"count=\"{}\">{}</float_array>".format(
+					mesh_id, len(tangents) * 3, float_values))
+			self.writel(S_GEOM, 4, "<technique_common>")
+			self.writel(
+				S_GEOM, 4, "<accessor source=\"#{}-tangents-array\" "
+				"count=\"{}\" stride=\"3\">".format(mesh_id, len(tangents)))
+			self.writel(S_GEOM, 5, "<param name=\"X\" type=\"float\"/>")
+			self.writel(S_GEOM, 5, "<param name=\"Y\" type=\"float\"/>")
+			self.writel(S_GEOM, 5, "<param name=\"Z\" type=\"float\"/>")
+			self.writel(S_GEOM, 4, "</accessor>")
+			self.writel(S_GEOM, 4, "</technique_common>")
+			self.writel(S_GEOM, 3, "</source>")
+			
+		if has_bitangents:
+			self.writel(S_GEOM, 3, "<source id=\"{}-bitangents\">".format(
+				mesh_id))
+			float_values = ""
+			for v in bitangents:
+				float_values += " {} {} {}".format(
+					v.x, v.y, v.z)
+			self.writel(
+				S_GEOM, 4, "<float_array id=\"{}-bitangents-array\" "
+				"count=\"{}\">{}</float_array>".format(
+					mesh_id, len(bitangents) * 3, float_values))
+			self.writel(S_GEOM, 4, "<technique_common>")
+			self.writel(
+				S_GEOM, 4, "<accessor source=\"#{}-bitangents-array\" "
+				"count=\"{}\" stride=\"3\">".format(mesh_id, len(bitangents)))
+			self.writel(S_GEOM, 5, "<param name=\"X\" type=\"float\"/>")
+			self.writel(S_GEOM, 5, "<param name=\"Y\" type=\"float\"/>")
+			self.writel(S_GEOM, 5, "<param name=\"Z\" type=\"float\"/>")
+			self.writel(S_GEOM, 4, "</accessor>")
+			self.writel(S_GEOM, 4, "</technique_common>")
+			self.writel(S_GEOM, 3, "</source>")
+			
 		# Vertices
 		self.writel(S_GEOM, 3, '<vertices id="' + mesh_id + '-vertices">')
 		if (has_vertex):
@@ -828,6 +910,10 @@ class DaeExporter:
 				self.writel(S_GEOM, 4, '<input semantic="TEXCOORD" source="#' + mesh_id + '-texcoord"/>')
 			if (has_colors):
 				self.writel(S_GEOM, 4, '<input semantic="COLOR" source="#' + mesh_id + '-colors"/>')
+			if has_tangents:
+				self.writel(S_GEOM, 4, '<input semantic="TEXTANGENT" source="#' + mesh_id + '-tangents"/>')
+			if has_bitangents:
+				self.writel(S_GEOM, 4, '<input semantic="TEXBINORMAL" source="#' + mesh_id + '-bitangents"/>')
 				
 		self.writel(S_GEOM, 3, '</vertices>')
 
@@ -846,14 +932,22 @@ class DaeExporter:
 			if (has_vertex):
 				vertex_offset = offset
 				offset += 1
+			if (has_colors):
+				color_offset = offset
+				offset += 1
 			if (has_normals):
 				normal_offset = offset
 				offset += 1
 			if (has_uv):
 				uv_offset = offset
 				offset += 1
-			if (has_colors):
-				color_offset = vertex_offset
+			if has_tangents:
+				tangent_offset = offset
+				offset += 1
+			if has_bitangents:
+				bitangent_offset = offset
+				offset += 1
+				
 			stride = offset
 			
 			
@@ -866,12 +960,16 @@ class DaeExporter:
 				self.writel(S_GEOM, 3, '<' + prim_type + ' count="' + str(len(polygons)) + '" material="' + matref + '">')  # todo material
 				if (has_vertex):
 					self.writel(S_GEOM, 4, '<input semantic="VERTEX" source="#' + mesh_id + '-vertices" offset="' + str(vertex_offset) + '"/>')
+				if (has_colors):
+					self.writel(S_GEOM, 4, '<input semantic="COLOR" source="#' + mesh_id + '-colors" offset="' + str(color_offset) + '"/>')
 				if (has_normals):
 					self.writel(S_GEOM, 4, '<input semantic="NORMAL" source="#' + mesh_id + '-normals" offset="' + str(normal_offset) + '"/>')
 				if (has_uv):
 					self.writel(S_GEOM, 4, '<input semantic="TEXCOORD" source="#' + mesh_id + '-texcoord" offset="' + str(uv_offset) + '" set="0"/>')
-				if (has_colors):
-					self.writel(S_GEOM, 4, '<input semantic="COLOR" source="#' + mesh_id + '-colors" offset="' + str(color_offset) + '"/>')
+				if (has_tangents):
+					self.writel(S_GEOM, 4, '<input semantic="TEXTANGENT" source="#' + mesh_id + '-tangents" offset="' + str(tangent_offset) + '" set="0"/>')
+				if (has_bitangents):
+					self.writel(S_GEOM, 4, '<input semantic="TEXBINORMAL" source="#' + mesh_id + '-bitangents" offset="' + str(bitangent_offset) + '" set="0"/>')
 				
 				# vcount list if not triangulating, as a triangle always has 3 sides no need for an array of 3s
 				if (not triangulated):
@@ -889,19 +987,29 @@ class DaeExporter:
 					group_polygons = polygons[p]
 					normal_indices = None
 					uv_indices = None
+					if has_colors:
+						color_indices = surface_color_indices[mat_index][p]
 					if has_normals:
 						normal_indices = surface_normal_indices[mat_index][p]
 					if has_uv:
 						uv_indices = surface_uv_indices[mat_index][p]
+					if has_tangents:
+						tangent_indices = surface_tangent_indices[mat_index][p]
+					if has_bitangents:
+						bitangent_indices = surface_bitangent_indices[mat_index][p]
 					for i in range(0, len(polygons[p])):
 						if (has_vertex):
 							indices[vertex_offset] = group_polygons[i]
+						if has_colors:
+							indices[color_offset] = color_indices[i]
 						if (has_normals):
 							indices[normal_offset] = normal_indices[i]
 						if (has_uv):
 							indices[uv_offset] = uv_indices[i]
-						# if (has_colors):
-						# 	indices[color_offset] = group_polygons[i]
+						if has_tangents:
+							indices[tangent_offset] = tangent_indices[i]
+						if has_bitangents:
+							indices[bitangent_offset] = bitangent_indices[i]
 						index_buffer.append(indices.copy())
 				int_values += " ".join([str(i) for c in index_buffer for i in c])
 				int_values += "</p>"
@@ -2476,6 +2584,18 @@ class DaeExporter:
 		self.skeleton_at_first_bone = False
 		self.multichannel_single_clip = False
 		
+		self.use_tangents = False
+		self.always_tangent = False
+		
+		if self.config['tangents'] == 'NONE':
+			self.use_tangents = False
+		elif self.config['tangents'] == 'BUMPED':
+			self.use_tangents = True
+			self.always_tangent = False
+		elif self.config['tangents'] == 'ALWAYS':
+			self.use_tangents = True
+			self.always_tangent = True
+			
 		if self.config["compatibility"] == 'THREE':
 			self.overstuff_bones = True
 			self.surface_texture = True

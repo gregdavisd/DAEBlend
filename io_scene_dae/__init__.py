@@ -100,7 +100,16 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
 	    description="Export Triangles instead of Polygons.",
 	    default=False,
 	    )
-
+    
+    tangents = EnumProperty(
+        name="Tangents",
+        items=(('NONE', "None", "No tangents in mesh"),
+            ('BUMPED', "Normal mapped", "Only generate tangents for meshes with a normal map"),
+            ('ALWAYS', "Always", "Generate tangents for every mesh")),
+        description="Policy for generating tangents",
+        default='NONE',
+        )
+    
     use_copy_images = BoolProperty(
             name="Copy Images",
             description="Copy Images (create images/ subfolder)",
@@ -152,7 +161,8 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
     
     overstuff_skin = BoolProperty(
         name="Overstuff Skin",
-        description="Work around for some JavaScript Collada and glTF loaders that fudge up skinning animations",
+        description="Work around for some Collada and glTF loaders that incorrectly "
+            "assume every bone is added to the skinning controller",
         default=False,
         )
     
