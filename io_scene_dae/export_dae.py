@@ -261,21 +261,21 @@ class DaeExporter:
 		
 		self.writel(S_FX, 5, '<ambient>')
 		if (ambient_tex != None):
-			self.writel(S_FX, 6, '<texture texture="' + ambient_tex + '" texcoord="ambient"/>')
+			self.writel(S_FX, 6, '<texture texture="' + ambient_tex + '" texcoord="UVMap"/>')
 		else:
 			self.writel(S_FX, 6, '<color>' + numarr_alpha(self.scene.world.ambient_color, material.ambient) + ' </color>')
 		self.writel(S_FX, 5, '</ambient>')
 		
 		self.writel(S_FX, 5, '<diffuse>')
 		if (diffuse_tex != None):
-			self.writel(S_FX, 6, '<texture texture="' + diffuse_tex + '" texcoord="diffuse"/>')
+			self.writel(S_FX, 6, '<texture texture="' + diffuse_tex + '" texcoord="UVMap"/>')
 		else:
 			self.writel(S_FX, 6, '<color>' + numarr_alpha(material.diffuse_color, material.diffuse_intensity) + '</color>')
 		self.writel(S_FX, 5, '</diffuse>')
 		
 		self.writel(S_FX, 5, '<specular>')
 		if (specular_tex != None):
-			self.writel(S_FX, 6, '<texture texture="' + specular_tex + '" texcoord="specular"/>')
+			self.writel(S_FX, 6, '<texture texture="' + specular_tex + '" texcoord="UVMap"/>')
 		else:
 			self.writel(S_FX, 6, '<color>' + numarr_alpha(material.specular_color, material.specular_intensity) + '</color>')
 		self.writel(S_FX, 5, '</specular>')
@@ -295,7 +295,7 @@ class DaeExporter:
 		
 		if transparent_tex:
 			self.writel(S_FX, 5, '<transparent>')
-			self.writel(S_FX, 6, '<texture texture="' + transparent_tex + '" texcoord="transparent"/>')
+			self.writel(S_FX, 6, '<texture texture="' + transparent_tex + '" texcoord="UVMap"/>')
 			self.writel(S_FX, 5, '</transparent>')
 		
 		self.writel(S_FX, 5, '<index_of_refraction>')
@@ -304,9 +304,13 @@ class DaeExporter:
 		
 		self.writel(S_FX, 4, '</' + shtype + '>')
 		if (normal_tex):
-			self.writel(S_FX, 4, '<bump bumptype="NORMALMAP">')
-			self.writel(S_FX, 5, '<texture texture="' + normal_tex + '" texcoord="normal"/>')
-			self.writel(S_FX, 4, '</bump>')
+			self.writel(S_FX, 4, '<extra>')
+			self.writel(S_FX, 5, '<technique profile="FCOLLADA">')
+			self.writel(S_FX, 6, '<bump bumptype="NORMALMAP">')
+			self.writel(S_FX, 7, '<texture texture="' + normal_tex + '" texcoord="UVMap"/>')
+			self.writel(S_FX, 6, '</bump>')
+			self.writel(S_FX, 5, '</technique>')
+			self.writel(S_FX, 4, '</extra>')
 			
 		self.writel(S_FX, 3, '</technique>')
 		self.writel(S_FX, 2, '</profile_COMMON>')
@@ -1400,7 +1404,9 @@ class DaeExporter:
 			material = node.material_slots[material_slot].material
 			if material:
 				material_id = lookup["material"][material]
-				self.writel(S_NODES, il + 3, '<instance_material symbol="' + material_symbol + '" target="#' + material_id + '"/>')
+				self.writel(S_NODES, il + 3, '<instance_material symbol="' + material_symbol + '" target="#' + material_id + '">')
+				self.writel(S_NODES, il + 4, '<bind_vertex_input semantic="UVMap" input_semantic="TEXCOORD" input_set="0"/>')
+				self.writel(S_NODES, il + 3, '</instance_material>')
 		self.writel(S_NODES, il + 2, '</technique_common>')
 		self.writel(S_NODES, il + 1, '</bind_material>')
 
@@ -2221,7 +2227,7 @@ class DaeExporter:
 		xform_cache, blend_cache = self.get_animation_transforms(start, end, lookup)
 		tcn = []
 		if self.multichannel_single_clip:
-			animation_id=action_name + '-anim'	
+			animation_id = action_name + '-anim'	
 			self.writel(S_ANIM, 1, '<animation id="' + animation_id + '">')
 		for node_id, cache in xform_cache.items():
 			tcn.append(self.export_animation_xforms(node_id, action_name, cache))
@@ -2465,7 +2471,7 @@ class DaeExporter:
 		
 		self.overstuff_bones = False
 		self.surface_texture = False
-		self.pound_some_more = False
+		self.pound_some_more = True
 		self.triangulate = self.config["use_triangles"]
 		self.skeleton_at_first_bone = False
 		self.multichannel_single_clip = False
@@ -2480,7 +2486,8 @@ class DaeExporter:
 			self.surface_texture = True
 			self.skeleton_at_first_bone = True
 			
-			
+		if not self.overstuff_bones:
+			self.overstuff_bones = self.config["overstuff_skin"]
 
 def save(operator, context,
 	filepath="",

@@ -26,7 +26,7 @@ bl_info = {
     "location": "File > Import-Export",
     "description": ("Export DAE Scenes. "),
     "warning": "",
-    "wiki_url": ("https://github.com/gregeryb/Blender-Collada"),
+    "wiki_url": ("https://github.com/gregeryb/DAEBlend"),
     "tracker_url": "",
     "support": 'COMMUNITY',
     "category": "Import-Export"}
@@ -148,6 +148,12 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
             ('GODOT', "Better Collada/Godot", "Godot game engine compatibility")),
         description="Alter output to workaround bugs and differences for importers",
         default='NONE',
+        )
+    
+    overstuff_skin = BoolProperty(
+        name="Overstuff Skin",
+        description="Work around for some JavaScript Collada and glTF loaders that fudge up skinning animations",
+        default=False,
         )
     
     @property
