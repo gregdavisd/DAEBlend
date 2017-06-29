@@ -86,13 +86,9 @@ def vector_equal(a, b):
 	return True
 
 def numarr_alpha(a, mult=1.0):
-	" ".join([str(x * mult) for x in a])
-	s = " "
-	for x in a:
-		s += " " + str(x * mult)
+	s = " ".join([str(x) for x in a])
 	if len(a) == 3:
 		s += " 1.0"
-	s += " "
 	return s
 
 def strarr(arr):
@@ -263,7 +259,11 @@ class DaeExporter:
 		if (ambient_tex != None):
 			self.writel(S_FX, 6, '<texture texture="' + ambient_tex + '" texcoord="UVMap"/>')
 		else:
-			self.writel(S_FX, 6, '<color>' + numarr_alpha(self.scene.world.ambient_color, material.ambient) + ' </color>')
+			if self.scene.world:
+				self.writel(S_FX, 6, '<color>' + numarr_alpha(self.scene.world.ambient_color, material.ambient) + ' </color>')
+			else:
+				self.writel(S_FX, 6, '<color>' + numarr_alpha(Color((0,0,0)), material.ambient) + ' </color>')
+				
 		self.writel(S_FX, 5, '</ambient>')
 
 		self.writel(S_FX, 5, '<diffuse>')
