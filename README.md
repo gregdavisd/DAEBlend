@@ -9,6 +9,7 @@ Currently exports:
 - Armatures and skin deformations.
 - Rigid animation by parenting meshes to armature bones. Armatures can also be parented to a bone of another armature allowing for chains of armatures.
 - Morph targets (shape keys). Morph Key animation is experimental as the official Collada spec doesn't support it.
+- Different coordinate systems for OpenGL and DirectX. Changes geometry data so doesn't use tricks like adding rotation nodes.
 - Cameras.
 - Lamps.
 
