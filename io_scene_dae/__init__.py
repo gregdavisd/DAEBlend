@@ -78,6 +78,16 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
             description="Export only selected objects (and visible in active layers if that applies).",
             default=False,
             )
+    
+    axis_type = EnumProperty(
+        name="Coordinates",
+        items=(('ZUP', "Z-Up (Blender)", "Z-Up axis, right handed"),
+               ('YUPR', "Y-Up (OpenGL)", "Y-Up axis, right handed"),
+               ('YUPL', "Y-Up (DirectX)", "Y-Up axis, left handed, Z-axis will be reflected")
+               ),
+        description="Adjust up axis. All geometry data is adjusted to the specified coordinate system.",
+        default='YUPR',
+        )
 
     transform_type = EnumProperty(
         name="Transforms",
