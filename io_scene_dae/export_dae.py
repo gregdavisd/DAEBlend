@@ -109,13 +109,15 @@ class DaeExporter:
 			out.transpose()				
 		return " ".join([str(e) for v in out for e in v])
 
-	def strxyz(self, xyz):
+	def strxyz(self, xyz,abso=False):
 		if self.axis_type == "ZUP":
 			out = xyz
 		elif self.axis_type == "YUPR":
 			out = [xyz[0], xyz[2], -xyz[1]]
 		elif self.axis_type == "YUPL":
 			out = [xyz[0], xyz[2], xyz[1]]
+		if abso:
+			out = [abs(c) for c in out]
 			
 		return " ".join([str(e) for e in out])
 
@@ -1476,7 +1478,6 @@ class DaeExporter:
 			return False
 		if (self.config["use_active_layers"]):
 			valid = False
-			# print("NAME: "+node.name)
 			for i in range(20):
 				if (node.layers[i] and self.scene.layers[i]):
 					valid = True
@@ -1699,8 +1700,8 @@ class DaeExporter:
 			self.writel(S_P_MODEL, 5, '<collision_filter_groups>{}</collision_filter_groups>'.format(" ".join(collision_groups)))
 		linear_factor = [1.0, 1.0, 1.0]
 		angular_factor = [1.0, 1.0, 1.0]
-		self.writel(S_P_MODEL, 5, '<linear_factor>{}</linear_factor>'.format(self.strxyz(linear_factor)))
-		self.writel(S_P_MODEL, 5, '<angular_factor>{}</angular_factor>'.format(self.strxyz(angular_factor)))
+		self.writel(S_P_MODEL, 5, '<linear_factor>{}</linear_factor>'.format(self.strxyz(linear_factor,True)))
+		self.writel(S_P_MODEL, 5, '<angular_factor>{}</angular_factor>'.format(self.strxyz(angular_factor,True)))
 		self.writel(S_P_MODEL, 4, '</technique>')
 		self.writel(S_P_MODEL, 3, '</extra>')
 		self.writel(S_P_MODEL, 2, '</rigid_body>')
@@ -1759,8 +1760,8 @@ class DaeExporter:
 			angular_factor[1] = 0.0;
 		if node.game.lock_rotation_z:
 			angular_factor[2] = 0.0;
-		self.writel(S_P_MODEL, 5, '<linear_factor>{}</linear_factor>'.format(self.strxyz(linear_factor)))
-		self.writel(S_P_MODEL, 5, '<angular_factor>{}</angular_factor>'.format(self.strxyz(angular_factor)))
+		self.writel(S_P_MODEL, 5, '<linear_factor>{}</linear_factor>'.format(self.strxyz(linear_factor,True)))
+		self.writel(S_P_MODEL, 5, '<angular_factor>{}</angular_factor>'.format(self.strxyz(angular_factor,True)))
 		self.writel(S_P_MODEL, 4, '</technique>')
 		self.writel(S_P_MODEL, 4, '<technique profile="blender">')
 		self.writel(S_P_MODEL, 5, '<physics_type>{}</physics_type>'.format(node.game.physics_type))
