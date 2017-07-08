@@ -397,7 +397,10 @@ class DaeExporter:
 			mesh.calc_normals_split()
 
 		if calc_tangents:
-			mesh.calc_tangents()
+			try:
+				mesh.calc_tangents()
+			except:
+				pass
 
 		if (mesh != node.data):
 			self.meshes_to_clear.append(mesh)
@@ -409,6 +412,20 @@ class DaeExporter:
 		else:
 			return Color(color).freeze()
 
+	def loop_property_to_indexed(self, loop_vertices, prop):
+		surface = {}
+		pool = list(set([getattr(ml, prop).freeze() for g in loop_vertices.values() for p in g for ml in p]))
+		if (not ((len(pool) == 1) and (pool[0].length < 0.1))):
+			index_map = {k:v for (v, k) in enumerate(pool)}
+			surface = {
+				g:s for (g, s) in
+					zip(loop_vertices.keys(),
+					[[[index_map[getattr(v, prop).freeze()] for v in p] for p in g]
+					for g in loop_vertices.values()])}
+		else:
+			pool = []
+		return pool, surface
+
 	def get_mesh_surfaces(self, mesh):
 		# Turn the mesh into buffers and index buffers, polygons are grouped by material index
 
@@ -418,8 +435,6 @@ class DaeExporter:
 		# get polygons
 		loop_vertices = self.get_polygon_groups(mesh)
 
-		# convert dictionary of loop vertices to dictionary of vertex indices
-		# v[0] is loop index, v[1] is the vertex
 		surface_v_indices = {
 			g:s for (g, s) in
 				zip(loop_vertices.keys(),
@@ -431,41 +446,15 @@ class DaeExporter:
 		split_normals = []
 		surface_split_normals = {}
 		if not self.never_split_normals and mesh.has_custom_normals and mesh.use_auto_smooth:
-			split_normals = list(set([ml.normal.freeze() for g in loop_vertices.values() for p in g for ml in p]))
-			split_normal_map = {k:v for (v, k) in enumerate(split_normals)}
-			surface_split_normals = {
-				g:s for (g, s) in
-					zip(loop_vertices.keys(),
-					[[[split_normal_map[v.normal.freeze()] for v in p] for p in g]
-					for g in loop_vertices.values()])}
+			split_normals, surface_split_normals = self.loop_property_to_indexed(loop_vertices, "normal")
 
 		surface_tangent_indices = {}
 		tangents = []
-		if self.use_tangents:
-			tangents = list(set([ml.tangent.freeze() for g in loop_vertices.values() for p in g for ml in p]))
-			if (not ((len(tangents) == 1) and (tangents[0].length < 0.1))):
-				tangents_map = {k:v for (v, k) in enumerate(tangents)}
-				surface_tangent_indices = {
-					g:s for (g, s) in
-						zip(loop_vertices.keys(),
-						[[[tangents_map[v.tangent.freeze()] for v in p] for p in g]
-						for g in loop_vertices.values()])}
-			else:
-				tangents = []
-
 		surface_bitangent_indices = {}
 		bitangents = []
 		if self.use_tangents:
-			bitangents = list(set([ml.bitangent.freeze() for g in loop_vertices.values() for p in g for ml in p]))
-			if (not ((len(bitangents) == 1) and (bitangents[0].length < 0.1))):
-				bitangents_map = {k:v for (v, k) in enumerate(bitangents)}
-				surface_bitangent_indices = {
-					g:s for (g, s) in
-						zip(loop_vertices.keys(),
-						[[[bitangents_map[v.bitangent.freeze()] for v in p] for p in g]
-						for g in loop_vertices.values()])}
-			else:
-				bitangents = []
+			tangents, surface_tangent_indices = self.loop_property_to_indexed(loop_vertices, "tangent")
+			bitangents, surface_bitangent_indices = self.loop_property_to_indexed(loop_vertices, "bitangent")
 
 		# get uv's
 		if (mesh.uv_layers != None) and (mesh.uv_layers.active != None):
@@ -514,14 +503,16 @@ class DaeExporter:
 		# vertices = array of xyz point tuples
 		# colors = array of r,g,b color tuples
 		# normals = array of xyz vector tuples
+		# split_normals = array of xyz vector tuples
 		# uv = array of uv point tuples
 		# tangents = array of xyz tangent tuples
 		# bitangets = array of xyz bitangent tuples
 		#
 		# Polygon vertex index data
 		# surface_v_indices = [material groups][polygons][index into vertices[]]
+		# surface_split_normals = [material groups][polygons][index into split_normals[]]
 		# surface_color_indices = [material groups][polygons][index into colors[]]
-		# surface_uv_indices = [material groups][polygons][index into uv]
+		# surface_uv_indices = [material groups][polygons][index into uv[]]
 		# surface_tangent_indices = [material groups][polygons][index into tangents[]]
 		# surface_bitangents_indices = [material groups][polygons][index into bitangents[]]
 		return vertices, colors, normals, split_normals, uv, tangents, bitangents, surface_v_indices, surface_split_normals, surface_color_indices, surface_uv_indices, surface_tangent_indices, surface_bitangent_indices
