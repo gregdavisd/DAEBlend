@@ -101,15 +101,15 @@ class DaeExporter:
 			out = Matrix([mtx[0], mtx[2], -mtx[1], mtx[3]])
 			out.transpose()
 			out = Matrix([out[0], out[2], -out[1], out[3]])
-			out.transpose()			
+			out.transpose()
 		elif self.axis_type == "YUPL":
 			out = Matrix([mtx[0], mtx[2], mtx[1], mtx[3]])
 			out.transpose()
 			out = Matrix([out[0], out[2], out[1], out[3]])
-			out.transpose()				
+			out.transpose()
 		return " ".join([str(e) for v in out for e in v])
 
-	def strxyz(self, xyz,abso=False):
+	def strxyz(self, xyz, abso=False):
 		if self.axis_type == "ZUP":
 			out = xyz
 		elif self.axis_type == "YUPR":
@@ -118,7 +118,7 @@ class DaeExporter:
 			out = [xyz[0], xyz[2], xyz[1]]
 		if abso:
 			out = [abs(c) for c in out]
-			
+
 		return " ".join([str(e) for e in out])
 
 	def new_id(self, t):
@@ -288,7 +288,7 @@ class DaeExporter:
 				self.writel(S_FX, 6, '<color>' + numarr_alpha(self.scene.world.ambient_color, material.ambient) + ' </color>')
 			else:
 				self.writel(S_FX, 6, '<color>' + numarr_alpha(Color((0, 0, 0)), material.ambient) + ' </color>')
-				
+
 		self.writel(S_FX, 5, '</ambient>')
 
 		self.writel(S_FX, 5, '<diffuse>')
@@ -350,7 +350,7 @@ class DaeExporter:
 
 			# get a mesh for this node
 		try:
-			mesh = node.to_mesh(self.scene, apply_modifiers, "RENDER")  # is this allright?
+			mesh = node.to_mesh(self.scene, apply_modifiers, "RENDER")
 		except:
 			return None
 
@@ -360,14 +360,14 @@ class DaeExporter:
 				bpy.data.meshes.remove(mesh)
 			return False
 
-
 		# force triangulation if the mesh has polygons with more than 4 sides
+		# corrupts custom normals
 		force_triangluation = False
-		if not triangulate:
-			for polygon in mesh.polygons:
-				if (polygon.loop_total > 4):
-					force_triangluation = True
-					break
+# 		if not triangulate:
+# 			for polygon in mesh.polygons:
+# 				if (polygon.loop_total > 4):
+# 					force_triangluation = True
+# 					break
 
 		if (triangulate or force_triangluation):
 			bm = bmesh.new()
@@ -383,15 +383,18 @@ class DaeExporter:
 			try:
 				instances = [n for n in self.valid_nodes if n.data == node.data]
 				bump_texture = [
-					tex_slot 
-						for i in instances 
-						for mat_slot in i.material_slots 
-							if mat_slot.material 
-						for tex_slot in mat_slot.material.texture_slots 
+					tex_slot
+						for i in instances
+						for mat_slot in i.material_slots
+							if mat_slot.material
+						for tex_slot in mat_slot.material.texture_slots
 							if tex_slot and tex_slot.use_map_normal ]
 			except:
 				pass
 			calc_tangents = bump_texture and len(bump_texture) > 0
+
+		if not self.never_split_normals and mesh.has_custom_normals and mesh.use_auto_smooth and not calc_tangents:
+			mesh.calc_normals_split()
 
 		if calc_tangents:
 			mesh.calc_tangents()
@@ -420,10 +423,21 @@ class DaeExporter:
 		surface_v_indices = {
 			g:s for (g, s) in
 				zip(loop_vertices.keys(),
-				[[[v.vertex_index for v in p] for p in g] 
+				[[[v.vertex_index for v in p] for p in g]
 				for g in loop_vertices.values()])}
 
 		normals = [v.normal.freeze() for v in mesh.vertices.values()]
+
+		split_normals = []
+		surface_split_normals = {}
+		if not self.never_split_normals and mesh.has_custom_normals and mesh.use_auto_smooth:
+			split_normals = list(set([ml.normal.freeze() for g in loop_vertices.values() for p in g for ml in p]))
+			split_normal_map = {k:v for (v, k) in enumerate(split_normals)}
+			surface_split_normals = {
+				g:s for (g, s) in
+					zip(loop_vertices.keys(),
+					[[[split_normal_map[v.normal.freeze()] for v in p] for p in g]
+					for g in loop_vertices.values()])}
 
 		surface_tangent_indices = {}
 		tangents = []
@@ -434,7 +448,7 @@ class DaeExporter:
 				surface_tangent_indices = {
 					g:s for (g, s) in
 						zip(loop_vertices.keys(),
-						[[[tangents_map[v.tangent.freeze()] for v in p] for p in g] 
+						[[[tangents_map[v.tangent.freeze()] for v in p] for p in g]
 						for g in loop_vertices.values()])}
 			else:
 				tangents = []
@@ -448,7 +462,7 @@ class DaeExporter:
 				surface_bitangent_indices = {
 					g:s for (g, s) in
 						zip(loop_vertices.keys(),
-						[[[bitangents_map[v.bitangent.freeze()] for v in p] for p in g] 
+						[[[bitangents_map[v.bitangent.freeze()] for v in p] for p in g]
 						for g in loop_vertices.values()])}
 			else:
 				bitangents = []
@@ -471,7 +485,7 @@ class DaeExporter:
 			surface_uv_indices = {
 				g:s for (g, s) in
 					zip(loop_vertices.keys(),
-					[[[uv_map[uv_layer[v.index].uv.freeze()] for v in p] for p in g] 
+					[[[uv_map[uv_layer[v.index].uv.freeze()] for v in p] for p in g]
 					for g in loop_vertices.values()])}
 
 
@@ -490,7 +504,7 @@ class DaeExporter:
 			surface_color_indices = {
 				g:s for (g, s) in
 					zip(loop_vertices.keys(),
-					[[[color_map[colors[v.vertex_index]] for v in p] for p in g] 
+					[[[color_map[colors[v.vertex_index]] for v in p] for p in g]
 					for g in loop_vertices.values()])}
 			colors = opt_colors
 		else:
@@ -510,7 +524,7 @@ class DaeExporter:
 		# surface_uv_indices = [material groups][polygons][index into uv]
 		# surface_tangent_indices = [material groups][polygons][index into tangents[]]
 		# surface_bitangents_indices = [material groups][polygons][index into bitangents[]]
-		return vertices, colors, normals, uv, tangents, bitangents, surface_v_indices, surface_color_indices, surface_uv_indices, surface_tangent_indices, surface_bitangent_indices
+		return vertices, colors, normals, split_normals, uv, tangents, bitangents, surface_v_indices, surface_split_normals, surface_color_indices, surface_uv_indices, surface_tangent_indices, surface_bitangent_indices
 
 	def get_polygon_groups(self, mesh):
 		# get a dictionary of polygons with loop vertices grouped by material
@@ -814,10 +828,15 @@ class DaeExporter:
 
 	def export_mesh(self, mesh, mesh_id, mesh_name, triangulated, convex=False, morph=False):
 
-		vertices, colors, normals, uv, tangents, bitangents, surface_v_indices, surface_color_indices, surface_uv_indices, surface_tangent_indices, surface_bitangent_indices = self.get_mesh_surfaces(mesh)
+		vertices, colors, normals, split_normals, uv, tangents, bitangents, surface_v_indices, surface_split_normals, surface_color_indices, surface_uv_indices, surface_tangent_indices, surface_bitangent_indices = self.get_mesh_surfaces(mesh)
 
 		has_vertex = len(vertices) > 0
-		has_normals = len(normals) > 0
+		has_split_normals = not morph and (len(split_normals) > 0)
+		if has_split_normals:
+			normals = split_normals
+			has_normals = True
+		else:
+			has_normals = len(normals) > 0
 		has_uv = not morph and (len(uv) > 0)
 		has_colors = not morph and (has_vertex and len(colors) > 0)
 		has_tangents = not morph and (len(tangents) > 0)
@@ -946,7 +965,10 @@ class DaeExporter:
 			if (has_vertex):
 				vertex_offset = offset
 				offset += 1
-			if (has_normals):
+			if (has_split_normals):
+				normal_offset = offset;
+				offset += 1
+			elif has_normals:
 				normal_offset = vertex_offset
 			if has_tangents:
 				tangent_offset = offset
@@ -999,6 +1021,8 @@ class DaeExporter:
 				for p in range(0, len(polygons)):
 					group_polygons = polygons[p]
 					uv_indices = None
+					if has_split_normals:
+						split_normal_indices = surface_split_normals[mat_index][p]
 					if has_colors:
 						color_indices = surface_color_indices[mat_index][p]
 					if has_uv:
@@ -1010,6 +1034,8 @@ class DaeExporter:
 					for i in range(0, len(polygons[p])):
 						if (has_vertex):
 							indices[vertex_offset] = group_polygons[i]
+						if has_split_normals:
+							indices[normal_offset] = split_normal_indices[i]
 						if has_colors:
 							indices[color_offset] = color_indices[i]
 						if (has_uv):
@@ -1700,8 +1726,8 @@ class DaeExporter:
 			self.writel(S_P_MODEL, 5, '<collision_filter_groups>{}</collision_filter_groups>'.format(" ".join(collision_groups)))
 		linear_factor = [1.0, 1.0, 1.0]
 		angular_factor = [1.0, 1.0, 1.0]
-		self.writel(S_P_MODEL, 5, '<linear_factor>{}</linear_factor>'.format(self.strxyz(linear_factor,True)))
-		self.writel(S_P_MODEL, 5, '<angular_factor>{}</angular_factor>'.format(self.strxyz(angular_factor,True)))
+		self.writel(S_P_MODEL, 5, '<linear_factor>{}</linear_factor>'.format(self.strxyz(linear_factor, True)))
+		self.writel(S_P_MODEL, 5, '<angular_factor>{}</angular_factor>'.format(self.strxyz(angular_factor, True)))
 		self.writel(S_P_MODEL, 4, '</technique>')
 		self.writel(S_P_MODEL, 3, '</extra>')
 		self.writel(S_P_MODEL, 2, '</rigid_body>')
@@ -1760,8 +1786,8 @@ class DaeExporter:
 			angular_factor[1] = 0.0;
 		if node.game.lock_rotation_z:
 			angular_factor[2] = 0.0;
-		self.writel(S_P_MODEL, 5, '<linear_factor>{}</linear_factor>'.format(self.strxyz(linear_factor,True)))
-		self.writel(S_P_MODEL, 5, '<angular_factor>{}</angular_factor>'.format(self.strxyz(angular_factor,True)))
+		self.writel(S_P_MODEL, 5, '<linear_factor>{}</linear_factor>'.format(self.strxyz(linear_factor, True)))
+		self.writel(S_P_MODEL, 5, '<angular_factor>{}</angular_factor>'.format(self.strxyz(angular_factor, True)))
 		self.writel(S_P_MODEL, 4, '</technique>')
 		self.writel(S_P_MODEL, 4, '<technique profile="blender">')
 		self.writel(S_P_MODEL, 5, '<physics_type>{}</physics_type>'.format(node.game.physics_type))
@@ -2579,6 +2605,7 @@ class DaeExporter:
 		self.skeleton_at_first_bone = False
 		self.multichannel_single_clip = False
 		self.axis_type = self.config['axis_type']
+		self.never_split_normals = False
 
 		self.use_tangents = False
 		self.always_tangent = False
@@ -2598,6 +2625,7 @@ class DaeExporter:
 		elif self.config["compatibility"] == 'ASSIMP':
 			self.pound_some_more = True
 			self.overstuff_bones = True
+			self.never_split_normals = True
 		elif self.config["compatibility"] == 'GODOT':
 			self.surface_texture = True
 			self.skeleton_at_first_bone = True
