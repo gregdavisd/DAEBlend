@@ -125,8 +125,8 @@ class DaeExporter:
 		self.last_id += 1
 		return "id-" + t + "-" + str(self.last_id)
 
-	def clean_bone_name(self, name):
-		if (" ".find(name) != -1):
+	def quote_spaces(self, name):
+		if (name.find(" ") != -1):
 			return '"' + name + '"'
 		else:
 			return name
@@ -641,7 +641,7 @@ class DaeExporter:
 	def export_mesh_morphs(self, node, mesh_id):
 		mesh = node.data
 
-		if (mesh.shape_keys != None and len(mesh.shape_keys.key_blocks)):
+		if self.mesh_has_morphs(mesh):
 			values = []
 			# save weight values for restoration after being monkeyed with
 
@@ -692,7 +692,7 @@ class DaeExporter:
 			self.writel(S_MORPH, 2, '<morph source="#' + mesh_id + '" method="NORMALIZED">')
 			self.writel(S_MORPH, 3, '<source id="' + morph_id + '-targets">')
 			self.writel(S_MORPH, 4, '<IDREF_array id="' + morph_id + '-targets-array" count="' + str(len(morph_targets)) + '">')
-			marr = " ".join([name[0] for name in morph_targets])
+			marr = " ".join([self.quote_spaces(name[0]) for name in morph_targets])
 			warr = " ".join([str(weight[1]) for weight in morph_targets])
 			self.writel(S_MORPH, 5, marr)
 			self.writel(S_MORPH, 4, '</IDREF_array>')
@@ -773,7 +773,7 @@ class DaeExporter:
 		# Joint Names
 
 		self.writel(S_SKIN, 3, '<source id="' + skin_id + '-joints">')
-		name_values = " ".join([self.clean_bone_name(name) for name in group_names])
+		name_values = " ".join([self.quote_spaces(name) for name in group_names])
 		self.writel(S_SKIN, 4, '<Name_array id="' + skin_id + '-joints-array" count="' + str(len(group_names)) + '">' + name_values + '</Name_array>')
 		self.writel(S_SKIN, 4, '<technique_common>')
 		self.writel(S_SKIN, 4, '<accessor source="#' + skin_id + '-joints-array" count="' + str(len(group_names)) + '" stride="1">')
@@ -817,12 +817,15 @@ class DaeExporter:
 		self.writel(S_SKIN, 2, '</skin>')
 		self.writel(S_SKIN, 1, '</controller>')
 
+	def mesh_has_morphs(self,mesh):
+		return (mesh.shape_keys and len(mesh.shape_keys.key_blocks))
+	
 	def export_mesh(self, mesh, mesh_id, mesh_name, triangulated, convex=False, morph=False):
 
 		vertices, colors, normals, split_normals, uv, tangents, bitangents, surface_v_indices, surface_split_normals, surface_color_indices, surface_uv_indices, surface_tangent_indices, surface_bitangent_indices = self.get_mesh_surfaces(mesh)
 
 		has_vertex = len(vertices) > 0
-		has_split_normals = not morph and (len(split_normals) > 0)
+		has_split_normals = not morph and (len(split_normals) > 0) and not self.mesh_has_morphs(mesh)
 		if has_split_normals:
 			normals = split_normals
 			has_normals = True
@@ -937,7 +940,7 @@ class DaeExporter:
 		self.writel(S_GEOM, 3, '<vertices id="' + mesh_id + '-vertices">')
 		if (has_vertex):
 			self.writel(S_GEOM, 4, '<input semantic="POSITION" source="#' + mesh_id + '-positions"/>')
-		if (has_normals):
+		if (has_normals and not has_split_normals):
 			self.writel(S_GEOM, 4, '<input semantic="NORMAL" source="#' + mesh_id + '-normals"/>')
 		self.writel(S_GEOM, 3, '</vertices>')
 
