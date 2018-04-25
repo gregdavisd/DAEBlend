@@ -441,6 +441,7 @@ class DaeExporter:
 				[[[v.vertex_index for v in p] for p in g]
 				for g in loop_vertices.values()])}
 
+		normals = [v.normal.copy().freeze() for v in mesh.vertices.values()]
 
 		split_normals = []
 		surface_split_normals = {}
