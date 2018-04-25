@@ -414,13 +414,13 @@ class DaeExporter:
 
 	def loop_property_to_indexed(self, loop_vertices, prop):
 		surface = {}
-		pool = list(set([getattr(ml, prop).freeze() for g in loop_vertices.values() for p in g for ml in p]))
+		pool = list(set([getattr(ml, prop).copy().freeze() for g in loop_vertices.values() for p in g for ml in p]))
 		if (not ((len(pool) == 1) and (pool[0].length < 0.1))):
 			index_map = {k:v for (v, k) in enumerate(pool)}
 			surface = {
 				g:s for (g, s) in
 					zip(loop_vertices.keys(),
-					[[[index_map[getattr(v, prop).freeze()] for v in p] for p in g]
+					[[[index_map[getattr(v, prop).copy().freeze()] for v in p] for p in g]
 					for g in loop_vertices.values()])}
 		else:
 			pool = []
@@ -441,7 +441,6 @@ class DaeExporter:
 				[[[v.vertex_index for v in p] for p in g]
 				for g in loop_vertices.values()])}
 
-		normals = [v.normal.freeze() for v in mesh.vertices.values()]
 
 		split_normals = []
 		surface_split_normals = {}
@@ -465,7 +464,7 @@ class DaeExporter:
 		uv = []
 		if (uv_layer != None):
 			# get all uv values, removing duplicates
-			uv = list(set([uv.uv.freeze() for uv in uv_layer.values()]))
+			uv = list(set([uv.uv.copy().freeze() for uv in uv_layer.values()]))
 
 		surface_uv_indices = {}
 		if (len(uv)):
@@ -474,7 +473,7 @@ class DaeExporter:
 			surface_uv_indices = {
 				g:s for (g, s) in
 					zip(loop_vertices.keys(),
-					[[[uv_map[uv_layer[v.index].uv.freeze()] for v in p] for p in g]
+					[[[uv_map[uv_layer[v.index].uv.copy().freeze()] for v in p] for p in g]
 					for g in loop_vertices.values()])}
 
 
@@ -1233,17 +1232,17 @@ class DaeExporter:
 		for cs in curve.splines:
 			if (cs.type == "BEZIER"):
 				for s in cs.bezier_points:
-					points.append(s.co.freeze())
-					handles_in.append(s.handle_left.freeze())
-					handles_out.append(s.handle_right.freeze())
+					points.append(s.co.copy().freeze())
+					handles_in.append(s.handle_left.copy().freeze())
+					handles_out.append(s.handle_right.copy().freeze())
 					tilts.append(s.tilt)
 					interps.append("BEZIER")
 			else:
 
 				for s in cs.points:
-					points.append(s.co.freeze())
-					handles_in.append(s.co.freeze())
-					handles_out.append(s.co.freeze())
+					points.append(s.co.copy().freeze())
+					handles_in.append(s.co.copy().freeze())
+					handles_out.append(s.co.copy().freeze())
 					tilts.append(s.tilt)
 					interps.append("LINEAR")
 
