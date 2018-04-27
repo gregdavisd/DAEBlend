@@ -77,11 +77,13 @@ def matrix_equal(a, b):
 			return False
 	return True
 
+
 def vector_equal(a, b):
 	for aa, bb in zip([e for e in a], [e for e in b]):
 		if (abs(aa - bb) > CMP_EPSILON):
 			return False
 	return True
+
 
 def numarr_alpha(a, mult=1.0):
 	s = " ".join([str(x * mult) for x in a])
@@ -89,8 +91,10 @@ def numarr_alpha(a, mult=1.0):
 		s += " 1.0"
 	return s
 
+
 def strarr(arr):
 	return " ".join([str(e) for e in arr])
+
 
 class DaeExporter:
 
@@ -266,7 +270,6 @@ class DaeExporter:
 				normal_tex = sampler_sid
 			if (ts.use_map_ambient and ambient_tex == None):
 				ambient_tex = sampler_sid
-
 
 		self.writel(S_FX, 3, '<technique sid="common">')
 		shtype = "blinn"
@@ -477,7 +480,6 @@ class DaeExporter:
 					[[[uv_map[uv_layer[v.index].uv.copy().freeze()] for v in p] for p in g]
 					for g in loop_vertices.values()])}
 
-
 		surface_color_indices = {}
 		if (mesh.vertex_colors):
 			# Blender doesn't have colors per vertex instead color per polygon loop vertex.
@@ -507,15 +509,32 @@ class DaeExporter:
 		# uv = array of uv point tuples
 		# tangents = array of xyz tangent tuples
 		# bitangets = array of xyz bitangent tuples
-		#
+
+		result = {}
+		result['vertices'] = vertices
+		result['colors'] = colors
+		result['normals'] = normals
+		result['split_normals'] = split_normals
+		result['uv'] = uv
+		result['tangents'] = tangents
+		result['bitangents'] = bitangents
+		
 		# Polygon vertex index data
-		# surface_v_indices = [material groups][polygons][index into vertices[]]
+		# surface_v_indices = [material groups][polygons][index into vertices[] and normals[]]
 		# surface_split_normals = [material groups][polygons][index into split_normals[]]
 		# surface_color_indices = [material groups][polygons][index into colors[]]
 		# surface_uv_indices = [material groups][polygons][index into uv[]]
 		# surface_tangent_indices = [material groups][polygons][index into tangents[]]
 		# surface_bitangents_indices = [material groups][polygons][index into bitangents[]]
-		return vertices, colors, normals, split_normals, uv, tangents, bitangents, surface_v_indices, surface_split_normals, surface_color_indices, surface_uv_indices, surface_tangent_indices, surface_bitangent_indices
+
+		result['surface_v_indices'] = surface_v_indices
+		result['surface_split_normals'] = surface_split_normals
+		result['surface_color_indices'] = surface_color_indices
+		result['surface_uv_indices'] = surface_uv_indices
+		result['surface_tangent_indices'] = surface_tangent_indices
+		result['surface_bitangent_indices'] = surface_bitangent_indices
+		
+		return result
 
 	def get_polygon_groups(self, mesh):
 		# get a dictionary of polygons with loop vertices grouped by material
@@ -747,6 +766,7 @@ class DaeExporter:
 		return skin_controller_lookup
 
 	def export_skin_controller(self, node, armature, mesh_id, skin_id):
+		
 		if not self.overstuff_bones:
 			group_names = [group.name for group in node.vertex_groups.values() if group.name in armature.data.bones.keys()]
 		else:
@@ -754,18 +774,18 @@ class DaeExporter:
 
 			group_names = [group for group in armature.data.bones.keys()]
 
+		missing_group_names = {group.name for group in node.vertex_groups.values() if group.name not in armature.data.bones.keys()}
+		group_names_index = dict({k:v for (v, k) in enumerate(group_names)}.items() | {k:-1 for k in missing_group_names}.items())
+
 		bones = [armature.data.bones[name] for name in group_names]
 		pose_matrices = [(armature.matrix_world * bone.matrix_local).inverted() for bone in bones]
-		weight_counts = [len(v.groups) for v in node.data.vertices]
 		weights = list(set([group.weight for v in node.data.vertices for group in v.groups]))
 		weights_index = {k:v for (v, k) in enumerate(weights)}
-		bone_weights = [i for w in
-					 [
-					 	[group_names.index(node.vertex_groups[g.group].name), weights_index[g.weight]]
-					 		for v in node.data.vertices for g in v.groups
-					 ]
-					for i in w]
-
+		vertex_weights = [[[group_names_index[node.vertex_groups[g.group].name], weights_index[g.weight]] for g in v.groups] for v in node.data.vertices]
+		vertex_weights = [[g for g in v if g[0] != -1] for v in vertex_weights]
+		weight_counts = [len(v) for v in vertex_weights]
+		
+		
 		self.writel(S_SKIN, 1, '<controller id="' + skin_id + '">')
 		self.writel(S_SKIN, 2, '<skin source="#' + mesh_id + '">')
 		self.writel(S_SKIN, 3, '<bind_shape_matrix>' + self.strmtx(node.matrix_world) + '</bind_shape_matrix>')
@@ -812,18 +832,32 @@ class DaeExporter:
 		self.writel(S_SKIN, 4, '<input semantic="JOINT" source="#' + skin_id + '-joints" offset="0"/>')
 		self.writel(S_SKIN, 4, '<input semantic="WEIGHT" source="#' + skin_id + '-weights" offset="1"/>')
 		self.writel(S_SKIN, 4, '<vcount>' + " ".join([str(c) for c in weight_counts]) + '</vcount>')
-		self.writel(S_SKIN, 4, '<v>' + " ".join([str(i) for i in bone_weights]) + '</v>')
+		self.writel(S_SKIN, 4, '<v>' + " ".join([str(i) for v in vertex_weights for g in v for i in g]) + '</v>')
 		self.writel(S_SKIN, 3, '</vertex_weights>')
 		self.writel(S_SKIN, 2, '</skin>')
 		self.writel(S_SKIN, 1, '</controller>')
 
-	def mesh_has_morphs(self,mesh):
+	def mesh_has_morphs(self, mesh):
 		return (mesh.shape_keys and len(mesh.shape_keys.key_blocks))
 	
 	def export_mesh(self, mesh, mesh_id, mesh_name, triangulated, convex=False, morph=False):
 
-		vertices, colors, normals, split_normals, uv, tangents, bitangents, surface_v_indices, surface_split_normals, surface_color_indices, surface_uv_indices, surface_tangent_indices, surface_bitangent_indices = self.get_mesh_surfaces(mesh)
+		surfaces = self.get_mesh_surfaces(mesh)
 
+		vertices = surfaces['vertices'] 
+		colors = surfaces['colors'] 
+		normals = surfaces['normals'] 
+		split_normals = surfaces['split_normals']  
+		uv = surfaces['uv'] 
+		tangents = surfaces['tangents']  
+		bitangents = surfaces['bitangents'] 
+		surface_v_indices = surfaces['surface_v_indices']  
+		surface_split_normals = surfaces['surface_split_normals'] 
+		surface_color_indices = surfaces['surface_color_indices']  
+		surface_uv_indices = surfaces['surface_uv_indices'] 
+		surface_tangent_indices = surfaces['surface_tangent_indices'] 
+		surface_bitangent_indices = surfaces['surface_bitangent_indices']  
+		
 		has_vertex = len(vertices) > 0
 		has_split_normals = not morph and (len(split_normals) > 0) and not self.mesh_has_morphs(mesh)
 		if has_split_normals:
@@ -979,7 +1013,6 @@ class DaeExporter:
 
 			stride = offset
 
-
 			for mat_index, polygons in surface_v_indices.items():
 
 				# Every renderable mesh must have a material symbol even if no material is assigned in Blender.
@@ -1013,31 +1046,20 @@ class DaeExporter:
 				index_buffer = []
 				indices = [0 for i in range(stride)]
 				for p in range(0, len(polygons)):
-					group_polygons = polygons[p]
 					uv_indices = None
-					if has_split_normals:
-						split_normal_indices = surface_split_normals[mat_index][p]
-					if has_colors:
-						color_indices = surface_color_indices[mat_index][p]
-					if has_uv:
-						uv_indices = surface_uv_indices[mat_index][p]
-					if has_tangents:
-						tangent_indices = surface_tangent_indices[mat_index][p]
-					if has_bitangents:
-						bitangent_indices = surface_bitangent_indices[mat_index][p]
 					for i in range(0, len(polygons[p])):
-						if (has_vertex):
-							indices[vertex_offset] = group_polygons[i]
+						if has_vertex:
+							indices[vertex_offset] = polygons[p][i]
 						if has_split_normals:
-							indices[normal_offset] = split_normal_indices[i]
+							indices[normal_offset] = surface_split_normals[mat_index][p][i]
 						if has_colors:
-							indices[color_offset] = color_indices[i]
-						if (has_uv):
-							indices[uv_offset] = uv_indices[i]
+							indices[color_offset] = surface_color_indices[mat_index][p][i]
+						if has_uv:
+							indices[uv_offset] = surface_uv_indices[mat_index][p][i]
 						if has_tangents:
-							indices[tangent_offset] = tangent_indices[i]
+							indices[tangent_offset] = surface_tangent_indices[mat_index][p][i]
 						if has_bitangents:
-							indices[bitangent_offset] = bitangent_indices[i]
+							indices[bitangent_offset] = surface_bitangent_indices[mat_index][p][i]
 						index_buffer.append(indices.copy())
 				int_values += " ".join([str(i) for c in index_buffer for i in c])
 				int_values += "</p>"
@@ -1135,7 +1157,6 @@ class DaeExporter:
 				# this node will be exported when the parent exports its children
 				continue
 			self.export_armature_bone(b, il, self.skeleton_info[node], lookup, nodes_lookup, parenting_map)
-
 
 	def export_cameras(self):
 		cameras = 	set(
@@ -1354,13 +1375,11 @@ class DaeExporter:
 			m = Matrix.Rotation(-math.pi / 2.0, 4, Vector((1, 0, 0)))
 			matrix = matrix * m
 
-
 		if (self.transform_matrix_scale):
 			matrix, scale = self.split_matrix_scale(matrix)
 			return {"matrix":matrix, "scale":scale}, visible
 		else:
 			return {"matrix":matrix}, visible
-
 
 	def get_bone_deform_parent(self, bone):
 		# traverse up bone parenting to get a parent bone that has deform checked
@@ -1540,7 +1559,6 @@ class DaeExporter:
 			# Export all materials including those with fake users
 			materials = set([material for material in bpy.data.materials if material.users > 0])
 
-
 		# get texture map images
 
 		if (self.config["use_export_selected"]):
@@ -1569,7 +1587,6 @@ class DaeExporter:
 			image_id = self.get_node_id(image.name + "-image")
 			image_lookup[image] = image_id
 			self.export_image(image, image_id)
-
 
 		# export library_effects content
 
@@ -1807,7 +1824,6 @@ class DaeExporter:
 			self.writel(S_P_MODEL, il + 1, '</technique>')
 			self.writel(S_P_MODEL, il, '</extra>')
 
-
 	def export_game_collision_margin(self, node, il):
 		self.writel(S_P_MODEL, il, '<extra>')
 		self.writel(S_P_MODEL, il + 1, '<technique profile="bullet">')
@@ -1997,7 +2013,6 @@ class DaeExporter:
 		self.writel(S_NODES, 0, '</library_visual_scenes>')
 		return nodes_lookup
 
-
 	def export_asset(self):
 		self.writel(S_ASSET, 0, '<asset>')
 		self.writel(S_ASSET, 1, '<contributor>')
@@ -2155,7 +2170,6 @@ class DaeExporter:
 
 	def get_animation_transforms(self, start, end, lookup):
 
-
 		frame_orig = self.scene.frame_current
 
 		self.scene.frame_set(start)
@@ -2192,7 +2206,6 @@ class DaeExporter:
 							blend_cache[name] = []
 
 						self.append_morph_keyframe_if_different(blend_cache[name], key, node.data.shape_keys.key_blocks[i].value)
-
 
 				if (node.type == "ARMATURE"):
 					# All bones exported for now
@@ -2317,13 +2330,11 @@ class DaeExporter:
 				for strip in track[2]:
 					strip[0].mute = strip[1]
 
-
 	def export_animation_clip(self, id, start, end, tcn):
 		self.writel(S_ANIM_CLIPS, 1, '<animation_clip id="' + id + '" start="' + str((start - 1) / self.scene.render.fps) + '" end="' + str((end - 1) / self.scene.render.fps) + '">')
 		for z in tcn:
 			self.writel(S_ANIM_CLIPS, 2, '<instance_animation url="#' + z + '"/>')
 		self.writel(S_ANIM_CLIPS, 1, '</animation_clip>')
-
 
 	def settle_ik(self):
 		# fart around with frames so IK constraints settle into a final position (hopefully)
@@ -2383,7 +2394,6 @@ class DaeExporter:
 					end = strip.frame_end
 
 		return int(start), int(end)
-
 
 	def get_NLA_track_timeline(self, track):
 		start = sys.float_info.max;
@@ -2627,6 +2637,7 @@ class DaeExporter:
 		if not self.overstuff_bones:
 			self.overstuff_bones = self.config["overstuff_skin"]
 
+
 def save(operator, context,
 	filepath="",
 	use_selection=False,
@@ -2636,5 +2647,4 @@ def save(operator, context,
 	exp = DaeExporter(filepath, kwargs, operator)
 	exp.export()
 	return {'FINISHED'}  # so the script wont run after we have batch exported.
-
 
