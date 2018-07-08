@@ -314,7 +314,7 @@ class DaeExporter:
 
 		self.writel(S_FX, 5, '<reflective>')
 		if material.raytrace_mirror.use:
-			mirror_factor = raytrace_mirror.reflect_factor
+			mirror_factor = material.raytrace_mirror.reflect_factor
 		else:
 			mirror_factor = 0
 		self.writel(S_FX, 6, '<color>' + numarr_alpha(material.mirror_color, mirror_factor) + '</color>')
