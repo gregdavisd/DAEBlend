@@ -489,7 +489,7 @@ class DaeExporter:
 				color_buckets[loop_vertex.vertex_index][0] += 1
 				color_buckets[loop_vertex.vertex_index][1] += Vector(mesh.vertex_colors.active.data[loop_vertex.index].color)
 
-			colors = [self.average_color(color, count) for (count, color) in color_buckets if count != 0]
+			colors = [self.average_color(color, count) for (count, color) in color_buckets]
 			opt_colors = list(set(colors))
 			color_map = {k:v for (v, k) in enumerate(opt_colors)}
 			surface_color_indices = {
