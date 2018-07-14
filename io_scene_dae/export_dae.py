@@ -2256,7 +2256,7 @@ class DaeExporter:
 	def append_morph_keyframe_if_different(self, morph_keyframes, new_key, new_value):
 			
 		if not self.is_next_blend_different(morph_keyframes, new_value):
-			if len(morph_keyframes):
+			if len(morph_keyframes) > 1:
 				morph_keyframes.pop()
 			
 		morph_keyframes.append((new_key, new_value))
@@ -2304,8 +2304,7 @@ class DaeExporter:
 		if not self.is_next_keyframe_different(transforms, new_transform):
 			if len(transforms) > 1:
 				transforms.pop()
-			elif len(transforms)==1:
-				return
+
 		transforms.append((new_key, new_transform))
 
 	def is_next_keyframe_different(self, transforms, new_transform):
