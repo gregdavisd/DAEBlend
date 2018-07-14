@@ -785,7 +785,6 @@ class DaeExporter:
 		vertex_weights = [[g for g in v if g[0] != -1] for v in vertex_weights]
 		weight_counts = [len(v) for v in vertex_weights]
 		
-		
 		self.writel(S_SKIN, 1, '<controller id="' + skin_id + '">')
 		self.writel(S_SKIN, 2, '<skin source="#' + mesh_id + '">')
 		self.writel(S_SKIN, 3, '<bind_shape_matrix>' + self.strmtx(node.matrix_world) + '</bind_shape_matrix>')
@@ -2174,6 +2173,12 @@ class DaeExporter:
 
 		self.scene.frame_set(start)
 		self.settle_ik()
+		
+		# get a cache of the scene in rest pose to detect symmetrical animations
+		
+		rest_xform_cache = {}
+		rest_blend_cache = {}
+		self.cache_scene(rest_xform_cache, rest_blend_cache, lookup, 0)
 
 		frame_len = 1.0 / self.scene.render.fps
 
@@ -2185,85 +2190,107 @@ class DaeExporter:
 		for t in range(start, end + 1):
 			self.scene.frame_set(t)
 			key = (t - 1) * frame_len
-
-			for node in self.scene.objects:
-
-				if (not node in self.valid_nodes):
-					continue
-				if (node.data and (node.data in lookup["morph"])):
-					node_id = lookup["nodes"][node]
-					morph_controller = lookup["morph"][node.data]
-					morph_id = morph_controller[0]
-					targets = morph_controller[1]
-					for i in range(1, len(node.data.shape_keys.key_blocks)):
-						name = node_id
-						if node in lookup["skin_controller"]:
-							name += "/controller/source"
-						else:
-							name += "/morph"
-						name += "/" + morph_id + "/" + targets[i - 1][0]
-						if (not (name in blend_cache)):
-							blend_cache[name] = []
-
-						self.append_morph_keyframe_if_different(blend_cache[name], key, node.data.shape_keys.key_blocks[i].value)
-
-				if (node.type == "ARMATURE"):
-					# All bones exported for now
-
-					for bone in node.data.bones:
-
-						bone_node_id = self.skeleton_info[node]["bone_ids"].get(bone, None)
-						if (bone_node_id is None or not self.skeleton_info[node]["has_transform"][bone]):
-							continue
-
-						posebone = node.pose.bones[bone.name]
-						transform = self.get_posebone_transform(node.pose.bones, posebone)
-						if transform:
-							if (not (bone_node_id in xform_cache)):
-								xform_cache[bone_node_id] = []
-							self.append_keyframe_if_different(xform_cache[bone_node_id], transform, key)
-
-				transform, visible = self.get_node_local_transform(node)
-				if visible:
-					node_id = lookup["nodes"][node]
-					if (not (node_id in xform_cache)):
-						xform_cache[node_id] = []
-					self.append_keyframe_if_different(xform_cache[node_id], transform, key)
+			self.cache_scene(xform_cache, blend_cache, lookup, key)
 
 		self.scene.frame_set(frame_orig)
 
-		xform_cache = self.xform_cache_without_constants(xform_cache)
-		blend_cache = self.blend_cache_without_constants(blend_cache)
+		xform_cache = self.xform_cache_without_constants(rest_xform_cache, xform_cache)
+		blend_cache = self.blend_cache_without_constants(rest_blend_cache, blend_cache)
 
 		return xform_cache, blend_cache
 
-	def append_morph_keyframe_if_different(self, morph_keyframes, new_key, new_value):
+	def cache_scene(self, xform_cache, blend_cache, lookup, key):
+		for node in self.scene.objects:
+			if (not node in self.valid_nodes):
+				continue
+			if (node.data and (node.data in lookup["morph"])):
+				node_id = lookup["nodes"][node]
+				morph_controller = lookup["morph"][node.data]
+				morph_id = morph_controller[0]
+				targets = morph_controller[1]
+				for i in range(1, len(node.data.shape_keys.key_blocks)):
+					name = node_id
+					if node in lookup["skin_controller"]:
+						name += "/controller/source"
+					else:
+						name += "/morph"
+					name += "/" + morph_id + "/" + targets[i - 1][0]
+					if (not (name in blend_cache)):
+						blend_cache[name] = []
+
+					self.append_morph_keyframe_if_different(blend_cache[name], key, node.data.shape_keys.key_blocks[i].value)
+
+			if (node.type == "ARMATURE"):
+				# All bones exported for now
+
+				for bone in node.data.bones:
+
+					bone_node_id = self.skeleton_info[node]["bone_ids"].get(bone, None)
+					if (bone_node_id is None or not self.skeleton_info[node]["has_transform"][bone]):
+						continue
+
+					posebone = node.pose.bones[bone.name]
+					transform = self.get_posebone_transform(node.pose.bones, posebone)
+					if transform:
+						if (not (bone_node_id in xform_cache)):
+							xform_cache[bone_node_id] = []
+						self.append_keyframe_if_different(xform_cache[bone_node_id], transform, key)
+
+			transform, visible = self.get_node_local_transform(node)
+			if visible:
+				node_id = lookup["nodes"][node]
+				if (not (node_id in xform_cache)):
+					xform_cache[node_id] = []
+				self.append_keyframe_if_different(xform_cache[node_id], transform, key)
+
+	def is_next_blend_different(self, morph_keyframes, new_value):
 		different = False
-		if (len(morph_keyframes)):
+		if len(morph_keyframes):
 			prev_value = morph_keyframes[-1][1];
+	
 			if (abs(prev_value - new_value) > (CMP_EPSILON / 100.0)):
 				different = True
-		else:
-			different = True
 
-		if different:
-			morph_keyframes.append((new_key, new_value))
+		return different
 
-	def blend_cache_without_constants(self, blend_cache):
+	def append_morph_keyframe_if_different(self, morph_keyframes, new_key, new_value):
+			
+		if not self.is_next_blend_different(morph_keyframes, new_value):
+			if len(morph_keyframes):
+				morph_keyframes.pop()
+			
+		morph_keyframes.append((new_key, new_value))
+
+	def blend_cache_without_constants(self, rest_blend_cache, blend_cache):
 		# remove morph animations that only have one weight value
 		blend_result = {}
+		include = False
 		for name, keyframes in blend_cache.items():
 			if (len(keyframes) > 1):
+				include = True
+			elif len(keyframes) == 1:
+				include = self.is_next_blend_different(rest_blend_cache[name], keyframes[0][1])
+			else:
+				include = false
+				
+			if include:	
 				blend_result[name] = keyframes
-
 		return blend_result
 
-	def xform_cache_without_constants(self, xform_cache):
+	def xform_cache_without_constants(self, rest_xform_cache, xform_cache):
 		# remove fcurves that have only one transformation over the entire timeline
 		xform_result = {}
 		for name, transforms in xform_cache.items():
-			if (len(transforms) > 1):
+			if len(transforms) > 1:
+				include = True
+			elif len(transforms) == 1:
+				include = self.is_next_keyframe_different(rest_xform_cache[name], transforms[0][1])
+			else:
+				include = false
+
+			if include:	
 				xform_result[name] = transforms
+				
 		return xform_result
 
 	def is_zero_scale(self, matrix):
@@ -2273,6 +2300,15 @@ class DaeExporter:
 			return False
 
 	def append_keyframe_if_different(self, transforms, new_transform, new_key):
+
+		if not self.is_next_keyframe_different(transforms, new_transform):
+			if len(transforms) > 1:
+				transforms.pop()
+			elif len(transforms)==1:
+				return
+		transforms.append((new_key, new_transform))
+
+	def is_next_keyframe_different(self, transforms, new_transform):
 		different = False
 
 		if (len(transforms)):
@@ -2297,9 +2333,8 @@ class DaeExporter:
 		else:
 			different = True
 
-		if (different):
-			transforms.append((new_key, new_transform))
-
+		return different
+		
 	def get_NLA_objects(self):
 		objects = {}
 
