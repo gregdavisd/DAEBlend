@@ -86,15 +86,17 @@ def vector_equal(a, b):
 
 
 def numarr_alpha(a, mult=1.0):
-	s = " ".join([str(x * mult) for x in a])
+	s = " ".join([strflt(x * mult) for x in a])
 	if len(a) == 3:
 		s += " 1.0"
 	return s
 
 
 def strarr(arr):
-	return " ".join([str(e) for e in arr])
+	return " ".join([strflt(e) for e in arr])
 
+def strflt(x):
+	return '{0:.4f}'.format(x)
 
 class DaeExporter:
 
@@ -111,7 +113,7 @@ class DaeExporter:
 			out.transpose()
 			out = Matrix([out[0], out[2], out[1], out[3]])
 			out.transpose()
-		return " ".join([str(e) for v in out for e in v])
+		return " ".join([strflt(e) for v in out for e in v])
 
 	def strxyz(self, xyz, abso=False):
 		if self.axis_type == "ZUP":
@@ -123,7 +125,7 @@ class DaeExporter:
 		if abso:
 			out = [abs(c) for c in out]
 
-		return " ".join([str(e) for e in out])
+		return " ".join([strflt(e) for e in out])
 
 	def new_id(self, t):
 		self.last_id += 1
@@ -309,7 +311,7 @@ class DaeExporter:
 		self.writel(S_FX, 5, '</specular>')
 
 		self.writel(S_FX, 5, '<shininess>')
-		self.writel(S_FX, 6, '<float>' + str(material.specular_hardness) + '</float>')
+		self.writel(S_FX, 6, '<float>' + strflt(material.specular_hardness) + '</float>')
 		self.writel(S_FX, 5, '</shininess>')
 
 		self.writel(S_FX, 5, '<reflective>')
@@ -322,7 +324,7 @@ class DaeExporter:
 
 		if (material.use_transparency):
 			self.writel(S_FX, 5, '<transparency>')
-			self.writel(S_FX, 6, '<float>' + str(material.alpha) + '</float>')
+			self.writel(S_FX, 6, '<float>' + strflt(material.alpha) + '</float>')
 			self.writel(S_FX, 5, '</transparency>')
 
 		if transparent_tex:
@@ -331,7 +333,7 @@ class DaeExporter:
 			self.writel(S_FX, 5, '</transparent>')
 
 		self.writel(S_FX, 5, '<index_of_refraction>')
-		self.writel(S_FX, 6, '<float>' + str(material.specular_ior) + '</float>')
+		self.writel(S_FX, 6, '<float>' + strflt(material.specular_ior) + '</float>')
 		self.writel(S_FX, 5, '</index_of_refraction>')
 
 		self.writel(S_FX, 4, '</' + shtype + '>')
@@ -712,7 +714,7 @@ class DaeExporter:
 			self.writel(S_MORPH, 3, '<source id="' + morph_id + '-targets">')
 			self.writel(S_MORPH, 4, '<IDREF_array id="' + morph_id + '-targets-array" count="' + str(len(morph_targets)) + '">')
 			marr = " ".join([self.quote_spaces(name[0]) for name in morph_targets])
-			warr = " ".join([str(weight[1]) for weight in morph_targets])
+			warr = " ".join([strflt(weight[1]) for weight in morph_targets])
 			self.writel(S_MORPH, 5, marr)
 			self.writel(S_MORPH, 4, '</IDREF_array>')
 			self.writel(S_MORPH, 4, '<technique_common>')
@@ -816,7 +818,7 @@ class DaeExporter:
 		# Skin Weights!
 
 		self.writel(S_SKIN, 3, '<source id="' + skin_id + '-weights">')
-		self.writel(S_SKIN, 4, '<float_array id="' + skin_id + '-weights-array" count="' + str(len(weights)) + '">' + " ".join([str(w) for w in weights]) + '</float_array>')
+		self.writel(S_SKIN, 4, '<float_array id="' + skin_id + '-weights-array" count="' + str(len(weights)) + '">' + " ".join([strflt(w) for w in weights]) + '</float_array>')
 		self.writel(S_SKIN, 4, '<technique_common>')
 		self.writel(S_SKIN, 4, '<accessor source="#' + skin_id + '-weights-array" count="' + str(len(weights)) + '" stride="1">')
 		self.writel(S_SKIN, 5, '<param name="WEIGHT" type="float"/>')
@@ -906,7 +908,7 @@ class DaeExporter:
 		# UV Arrays
 		if has_uv:
 			self.writel(S_GEOM, 3, '<source id="' + mesh_id + '-texcoord">')
-			float_values = " ".join([str(c) for v in [[v.x, v.y] for v in uv] for c in v])
+			float_values = " ".join([strflt(c) for v in [[v.x, v.y] for v in uv] for c in v])
 			self.writel(S_GEOM, 4, '<float_array id="' + mesh_id + '-texcoord-array" count="' + str(len(uv) * 2) + '">' + float_values + '</float_array>')
 			self.writel(S_GEOM, 4, '<technique_common>')
 			self.writel(S_GEOM, 5, '<accessor source="#' + mesh_id + '-texcoord-array" count="' + str(len(uv)) + '" stride="2">')
@@ -920,7 +922,7 @@ class DaeExporter:
 
 		if has_colors:
 			self.writel(S_GEOM, 3, '<source id="' + mesh_id + '-colors">')
-			float_values = " ".join([str(c) for v in [[v.r, v.g, v.b] for v in colors] for c in v])
+			float_values = " ".join([strflt(c) for v in [[v.r, v.g, v.b] for v in colors] for c in v])
 			self.writel(S_GEOM, 4, '<float_array id="' + mesh_id + '-colors-array" count="' + str(len(colors) * 3) + '">' + float_values + '</float_array>')
 			self.writel(S_GEOM, 4, '<technique_common>')
 			self.writel(S_GEOM, 5, '<accessor source="#' + mesh_id + '-colors-array" count="' + str(len(colors)) + '" stride="3">')
@@ -1178,17 +1180,17 @@ class DaeExporter:
 		self.writel(S_CAMS, 3, '<technique_common>')
 		if (camera.type == "PERSP"):
 			self.writel(S_CAMS, 4, '<perspective>')
-			self.writel(S_CAMS, 5, '<yfov> ' + str(math.degrees(camera.angle)) + ' </yfov>')  # I think?
-			self.writel(S_CAMS, 5, '<aspect_ratio> ' + str(self.scene.render.resolution_x / self.scene.render.resolution_y) + ' </aspect_ratio>')
-			self.writel(S_CAMS, 5, '<znear> ' + str(camera.clip_start) + ' </znear>')
-			self.writel(S_CAMS, 5, '<zfar> ' + str(camera.clip_end) + ' </zfar>')
+			self.writel(S_CAMS, 5, '<yfov> ' + strflt(math.degrees(camera.angle)) + ' </yfov>')  # I think?
+			self.writel(S_CAMS, 5, '<aspect_ratio> ' + strflt(self.scene.render.resolution_x / self.scene.render.resolution_y) + ' </aspect_ratio>')
+			self.writel(S_CAMS, 5, '<znear> ' + strflt(camera.clip_start) + ' </znear>')
+			self.writel(S_CAMS, 5, '<zfar> ' + strflt(camera.clip_end) + ' </zfar>')
 			self.writel(S_CAMS, 4, '</perspective>')
 		else:
 			self.writel(S_CAMS, 4, '<orthographic>')
-			self.writel(S_CAMS, 5, '<xmag> ' + str(camera.ortho_scale * 0.5) + ' </xmag>')  # I think?
-			self.writel(S_CAMS, 5, '<aspect_ratio> ' + str(self.scene.render.resolution_x / self.scene.render.resolution_y) + ' </aspect_ratio>')
-			self.writel(S_CAMS, 5, '<znear> ' + str(camera.clip_start) + ' </znear>')
-			self.writel(S_CAMS, 5, '<zfar> ' + str(camera.clip_end) + ' </zfar>')
+			self.writel(S_CAMS, 5, '<xmag> ' + strflt(camera.ortho_scale * 0.5) + ' </xmag>')  # I think?
+			self.writel(S_CAMS, 5, '<aspect_ratio> ' + strflt(self.scene.render.resolution_x / self.scene.render.resolution_y) + ' </aspect_ratio>')
+			self.writel(S_CAMS, 5, '<znear> ' + strflt(camera.clip_start) + ' </znear>')
+			self.writel(S_CAMS, 5, '<zfar> ' + strflt(camera.clip_end) + ' </zfar>')
 			self.writel(S_CAMS, 4, '</orthographic>')
 
 		self.writel(S_CAMS, 3, '</technique_common>')
@@ -1219,16 +1221,16 @@ class DaeExporter:
 			self.writel(S_LAMPS, 4, '<point>')
 			self.writel(S_LAMPS, 5, '<color>' + strarr(light.color) + '</color>')
 			att_by_distance = 2.0 / light.distance  # convert to linear attenuation
-			self.writel(S_LAMPS, 5, '<linear_attenuation>' + str(att_by_distance) + '</linear_attenuation>')
+			self.writel(S_LAMPS, 5, '<linear_attenuation>' + strflt(att_by_distance) + '</linear_attenuation>')
 			if (light.use_sphere):
-				self.writel(S_LAMPS, 5, '<zfar>' + str(light.distance) + '</zfar>')
+				self.writel(S_LAMPS, 5, '<zfar>' + strflt(light.distance) + '</zfar>')
 			self.writel(S_LAMPS, 4, '</point>')
 		elif (light.type == "SPOT"):
 			self.writel(S_LAMPS, 4, '<spot>')
 			self.writel(S_LAMPS, 5, '<color>' + strarr(light.color) + '</color>')
 			att_by_distance = 2.0 / light.distance  # convert to linear attenuation
-			self.writel(S_LAMPS, 5, '<linear_attenuation>' + str(att_by_distance) + '</linear_attenuation>')
-			self.writel(S_LAMPS, 5, '<falloff_angle>' + str(math.degrees(light.spot_size / 2)) + '</falloff_angle>')
+			self.writel(S_LAMPS, 5, '<linear_attenuation>' + strflt(att_by_distance) + '</linear_attenuation>')
+			self.writel(S_LAMPS, 5, '<falloff_angle>' + strflt(math.degrees(light.spot_size / 2)) + '</falloff_angle>')
 			self.writel(S_LAMPS, 4, '</spot>')
 		else:  # write a sun lamp for everything else (not supported)
 			self.writel(S_LAMPS, 4, '<directional>')
@@ -1310,7 +1312,7 @@ class DaeExporter:
 		self.writel(S_GEOM, 4, '</technique_common>')
 		self.writel(S_GEOM, 3, '</source>')
 		self.writel(S_GEOM, 3, '<source id="' + spline_id + '-tilts">')
-		tilt_values = " ".join([str(x) for x in tilts])
+		tilt_values = " ".join([strflt(x) for x in tilts])
 		self.writel(S_GEOM, 4, '<float_array id="' + spline_id + '-tilts-array" count="' + str(len(tilts)) + '">' + tilt_values + '</float_array>')
 		self.writel(S_GEOM, 4, '<technique_common>')
 		self.writel(S_GEOM, 4, '<accessor source="#' + spline_id + '-tilts-array" count="' + str(len(tilts)) + '" stride="1">')
@@ -1425,7 +1427,7 @@ class DaeExporter:
 			return {"matrix":matrix}
 
 	def get_scale_xml(self, scale):
-		return ['<scale sid="scale">' + self.strxyz(scale) + '</scale>']
+		return ['<scale sid="scale">' + self.strxyz(scale,True) + '</scale>']
 
 	def get_matrix_transform_xml(self, matrix):
 		return['<matrix sid="transform">' + self.strmtx(matrix) + '</matrix>']
@@ -1955,7 +1957,7 @@ class DaeExporter:
 		self.writel(S_P_SCENE, 4, '<deactivation use="true">')
 		self.writel(S_P_SCENE, 5, '<linear_velocity>{}</linear_velocity>'.format(self.scene.game_settings.deactivation_linear_threshold))
 		self.writel(S_P_SCENE, 5, '<angular_velocity>{}</angular_velocity>'.format(self.scene.game_settings.deactivation_angular_threshold))
-		self.writel(S_P_SCENE, 5, '<time>{}</time>'.format(str(self.scene.game_settings.deactivation_time)))
+		self.writel(S_P_SCENE, 5, '<time>{}</time>'.format(strflt(self.scene.game_settings.deactivation_time)))
 		self.writel(S_P_SCENE, 4, '</deactivation>')
 		self.writel(S_P_SCENE, 3, '</technique>')
 		self.writel(S_P_SCENE, 2, '</extra>')
@@ -2039,8 +2041,8 @@ class DaeExporter:
 
 		self.writel(S_ANIM, 1, '<animation id="' + anim_id + '">')
 
-		source_frames = " ".join([str(k[0]) for k in keys])
-		source_value = " ".join([str(k[1]) for k in keys])
+		source_frames = " ".join([strflt(k[0]) for k in keys])
+		source_value = " ".join([strflt(k[1]) for k in keys])
 
 		source_interps = " ".join([(" LINEAR ") * len(keys)])
 
@@ -2096,7 +2098,7 @@ class DaeExporter:
 		if not self.multichannel_single_clip:
 			self.writel(S_ANIM, 1, '<animation id="' + anim_id + '">')
 
-		source_frames = " ".join([str(k[0]) for k in keys])
+		source_frames = " ".join([strflt(k[0]) for k in keys])
 		source_matrix = " ".join([ self.strmtx(k[1]['matrix']) for k in keys])
 		if (self.transform_matrix_scale):
 			source_scale = " ".join([self.strxyz(k[1]['scale']) for k in keys])
@@ -2372,7 +2374,7 @@ class DaeExporter:
 					strip[0].mute = strip[1]
 
 	def export_animation_clip(self, id, start, end, tcn):
-		self.writel(S_ANIM_CLIPS, 1, '<animation_clip id="' + id + '" start="' + str((start - 1) / self.scene.render.fps) + '" end="' + str((end - 1) / self.scene.render.fps) + '">')
+		self.writel(S_ANIM_CLIPS, 1, '<animation_clip id="' + id + '" start="' + strflt((start - 1) / self.scene.render.fps) + '" end="' + strflt((end - 1) / self.scene.render.fps) + '">')
 		for z in tcn:
 			self.writel(S_ANIM_CLIPS, 2, '<instance_animation url="#' + z + '"/>')
 		self.writel(S_ANIM_CLIPS, 1, '</animation_clip>')
