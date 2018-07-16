@@ -2266,10 +2266,14 @@ class DaeExporter:
 		blend_result = {}
 		include = False
 		for name, keyframes in blend_cache.items():
+			if len(transforms):
+				if not self.is_next_blend_different(rest_blend_cache[name], keyframes[0][1]):
+					transforms.remove(transforms[0])
+					
 			if (len(keyframes) > 1):
 				include = True
 			elif len(keyframes) == 1:
-				include = self.is_next_blend_different(rest_blend_cache[name], keyframes[0][1])
+				include=False
 			else:
 				include = false
 				
@@ -2281,10 +2285,13 @@ class DaeExporter:
 		# remove fcurves that have only one transformation over the entire timeline
 		xform_result = {}
 		for name, transforms in xform_cache.items():
+			if len(transforms):
+				if not self.is_next_keyframe_different(rest_xform_cache[name], transforms[0][1]):
+					transforms.remove(transforms[0])
 			if len(transforms) > 1:
 				include = True
 			elif len(transforms) == 1:
-				include = self.is_next_keyframe_different(rest_xform_cache[name], transforms[0][1])
+				include=False
 			else:
 				include = false
 
