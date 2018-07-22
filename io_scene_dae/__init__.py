@@ -31,12 +31,10 @@ bl_info = {
     "support": 'COMMUNITY',
     "category": "Import-Export"}
 
-
 if "bpy" in locals():
     import imp
     if "export_dae" in locals():
         imp.reload(export_dae)
-
 
 import bpy
 from bpy.props import StringProperty, BoolProperty, FloatProperty, EnumProperty
@@ -45,7 +43,6 @@ from bpy_extras.io_utils import (ExportHelper,
                                  path_reference_mode,
                                  axis_conversion,
                                  )
-
 
 class ExportDAE(bpy.types.Operator, ExportHelper):
     '''Selection to DAE'''
@@ -59,26 +56,12 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
     # List of operator properties, the attributes will be assigned
     # to the class instance from the operator settings before calling.
 
-
-    object_types = EnumProperty(
-            name="Object Types",
-            options={'ENUM_FLAG'},
-            items=(('EMPTY', "Empty", ""),
-                   ('CAMERA', "Camera", ""),
-                   ('LAMP', "Lamp", ""),
-                   ('ARMATURE', "Armature", ""),
-                   ('MESH', "Mesh", ""),
-                   ('CURVE', "Curve", ""),
-                   ),
-            default={'EMPTY', 'CAMERA', 'LAMP', 'ARMATURE', 'MESH', 'CURVE'},
-            )
-
     use_export_selected = BoolProperty(
             name="Selected Objects",
             description="Export only selected objects (and visible in active layers if that applies).",
             default=False,
             )
-    
+
     axis_type = EnumProperty(
         name="Coordinates",
         items=(('ZUP', "Z-Up (Blender)", "Z-Up axis, right handed"),
@@ -98,11 +81,11 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
                     "(Use 'Matrix only' to simplify the transforms, use 'Matrix+Scale' if the scene is for use in a physics simulation)",
         default='MATRIX',
         )
-    
+
     use_mesh_modifiers = BoolProperty(
             name="Apply Modifiers",
             description="Apply modifiers to mesh objects (on a copy!).",
-	    default=False,
+	    default=True,
             )
 
     use_triangles = BoolProperty(
@@ -110,7 +93,7 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
 	    description="Export Triangles instead of Polygons.",
 	    default=False,
 	    )
-    
+
     tangents = EnumProperty(
         name="Tangents",
         items=(('NONE', "None", "No tangents in mesh"),
@@ -119,7 +102,7 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
         description="Policy for generating tangents",
         default='NONE',
         )
-    
+
     use_copy_images = BoolProperty(
             name="Copy Images",
             description="Copy Images (create images/ subfolder)",
@@ -130,18 +113,13 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
             description="Export only objects on the active layers.",
             default=True,
             )
-    use_physics = BoolProperty(
-            name="Export Physics",
-            description="Export rigid body information",
-            default=True,
-            )
-    
+
     use_anim_timeline = BoolProperty(
             name="Timeline",
             description=("Export the main timeline animation"),
             default=True,
             )
-    
+
     clip_type = EnumProperty(
         name="Clips",
         items=(('NONE', "None", "No animation clips"),
@@ -151,31 +129,14 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
         description="Style of animation clips",
         default='OBJECT',
         )
-        
-    use_deform_bone_only = BoolProperty(
-        name="Deform Only",
-        description="Skip exporting of bones which have 'Deform' unchecked. "
-        "If the bone is the parent of any geometry then it will still be exported.",
-        default=True,
-        )
 
-    compatibility = EnumProperty(
-        name="Compatibility",
-        items=(('NONE', "Collada 1.5", "Default Collada 1.5 with no workarounds"),
-            ('THREE', "Three.js", "Three.js compatibility"),
-            ('ASSIMP', "ASSIMP", "ASSIMP 3.3.1 compatibility"),
-            ('GODOT', "Better Collada/Godot", "Godot game engine compatibility")),
-        description="Alter output to workaround bugs and differences for importers",
-        default='NONE',
-        )
-    
     overstuff_skin = BoolProperty(
         name="Overstuff Skin",
         description="Work around for some Collada and glTF loaders that incorrectly "
             "assume every bone is added to the skinning controller",
         default=False,
         )
-    
+
     @property
     def check_extension(self):
         return True  # return self.batch_mode == 'OFF'
@@ -209,16 +170,13 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
         from . import export_dae
         return export_dae.save(self, context, **keywords)
 
-
 def menu_func(self, context):
     self.layout.operator(ExportDAE.bl_idname, text="Export Collada (.dae)")
-
 
 def register():
     bpy.utils.register_module(__name__)
 
     bpy.types.INFO_MT_file_export.append(menu_func)
-
 
 def unregister():
     bpy.utils.unregister_module(__name__)
