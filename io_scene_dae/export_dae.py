@@ -402,7 +402,7 @@ class DaeExporter:
     pass
    calc_tangents = bump_texture and len(bump_texture) > 0
 
-  if mesh.has_custom_normals and mesh.use_auto_smooth and not calc_tangents:
+  if not mesh.has_custom_normals and mesh.use_auto_smooth and not calc_tangents:
    mesh.calc_normals_split()
 
   if calc_tangents:
@@ -456,7 +456,7 @@ class DaeExporter:
 
   split_normals = []
   surface_split_normals = {}
-  if mesh.has_custom_normals and mesh.use_auto_smooth:
+  if mesh.has_custom_normals or mesh.use_auto_smooth:
    split_normals, surface_split_normals = self.loop_property_to_indexed(
     loop_vertices, "normal")
 
@@ -937,18 +937,16 @@ class DaeExporter:
   surface_bitangent_indices = surfaces['surface_bitangent_indices']
 
   has_vertex = len(vertices) > 0
-  has_split_normals = not morph and (
-   len(split_normals) > 0) and not self.mesh_has_morphs(mesh)
+  has_split_normals = not morph and (len(split_normals) > 0) and not self.mesh_has_morphs(mesh)
   if has_split_normals:
    normals = split_normals
-   has_normals = TrueS
+   has_normals = True
   else:
    has_normals = len(normals) > 0
   has_uv = not morph and (len(uv) > 0)
   has_colors = not morph and (has_vertex and len(colors) > 0)
   has_tangents = not morph and (len(tangents) > 0)
-  has_bitangents = not morph and (
-   has_normals and has_tangents and (len(bitangents) > 0))
+  has_bitangents = not morph and (has_normals and has_tangents and (len(bitangents) > 0))
 
   self.writel(S_GEOM, 1, '<geometry id="' +
      mesh_id + '" name="' + mesh_name + '">')
