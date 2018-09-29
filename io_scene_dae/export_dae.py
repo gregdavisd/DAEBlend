@@ -2433,17 +2433,20 @@ class DaeExporter:
 
  def get_animation_transforms(self, start, end, lookup):
 
-  frame_orig = self.bpy_context_scene.frame_current
 
-  self.bpy_context_scene.frame_set(start)
-  self.settle_ik()
-
-  # get a cache of the scene in rest pose to detect symmetrical
+  # get a cache of the scene in rest pose to detect constant and symmetrical
   # animations
 
   rest_xform_cache = {}
   rest_blend_cache = {}
+  self.rest_scene()
   self.cache_scene(rest_xform_cache, rest_blend_cache, lookup, 0)
+  self.restore_scene_pose()
+  
+  frame_orig = self.bpy_context_scene.frame_current
+
+  self.bpy_context_scene.frame_set(start)
+  self.settle_ik()
 
   frame_len = 1.0 / self.bpy_context_scene.render.fps
 
