@@ -2,3 +2,5 @@ debug.blend1
 debug_def.dae
 debug.dae
 *.blend1
+*.pyc
+*.pyc
