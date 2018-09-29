@@ -353,7 +353,7 @@ class DaeExporter:
   self.writel(S_FX, 2, '</profile_COMMON>')
   self.writel(S_FX, 1, '</effect>')
 
- def get_mesh(self, node, triangulate, force_modifiers=False):
+ def get_mesh(self, node, force_modifiers=False):
   apply_modifiers = force_modifiers or self.config["use_mesh_modifiers"]
 
   # get a mesh for this node
@@ -371,13 +371,13 @@ class DaeExporter:
   # force triangulation if the mesh has polygons with more than 4 sides
   # corrupts custom normals
   force_triangluation = False
-  if not triangulate:
+  if not self.triangulate:
    for polygon in mesh.polygons:
     if (polygon.loop_total > 4):
      force_triangluation = True
      break
 
-  if (triangulate or force_triangluation):
+  if (self.triangulate or force_triangluation):
    bm = bmesh.new()
    bm.from_mesh(mesh)
    bmesh.ops.triangulate(bm, faces=bm.faces)
@@ -636,7 +636,7 @@ class DaeExporter:
    if (has_modifiers  or node.data not in geometry_lookup):
     # generate mesh from node
 
-    mesh = self.get_mesh(node, self.triangulate)
+    mesh = self.get_mesh(node)
 
     # export the mesh
     if (mesh):
@@ -706,7 +706,7 @@ class DaeExporter:
     mesh.update()
     morph_id = self.get_node_id(node.data.name + "-" + shape.name)
     morph_targets.append([morph_id, values[k - 1]])
-    export_mesh = self.get_mesh(node, self.triangulate,force_modifiers=True)
+    export_mesh = self.get_mesh(node,force_modifiers=True)
     self.export_mesh(export_mesh, morph_id, morph_id, morph=True)
     shape.value = values[k - 1]
 
@@ -840,11 +840,12 @@ class DaeExporter:
   bones = [armature.data.bones[name] for name in group_names]
   pose_matrices = [
    (armature.matrix_world * bone.matrix_local).inverted() for bone in bones]
+  mesh=self.get_mesh(node)
   weights = list(
-   {group.weight for v in node.data.vertices for group in v.groups})
+   {group.weight for v in mesh.vertices for group in v.groups})
   weights_index = {k: v for (v, k) in enumerate(weights)}
   vertex_weights = [[[group_names_index[node.vertex_groups[g.group].name],
-       weights_index[g.weight]] for g in v.groups] for v in node.data.vertices]
+       weights_index[g.weight]] for g in v.groups] for v in mesh.vertices]
   vertex_weights = [[g for g in v if g[0] != -1] for v in vertex_weights]
   weight_counts = [len(v) for v in vertex_weights]
 
