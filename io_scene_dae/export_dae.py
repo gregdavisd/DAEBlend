@@ -354,7 +354,7 @@ class DaeExporter:
   self.writel(S_FX, 1, '</effect>')
 
  def get_mesh(self, node, force_modifiers=False):
-  apply_modifiers = force_modifiers or self.config["use_mesh_modifiers"]
+  apply_modifiers = force_modifiers or self.use_mesh_modifiers
 
   # get a mesh for this node
   try:
@@ -1659,7 +1659,7 @@ class DaeExporter:
 #   return False
   if (self.config["use_export_selected"] and not node.select):
    return False
-  if (self.config["use_active_layers"]):
+  if (self.use_active_layers):
    valid = False
    for i in range(20):
     if (node.layers[i] and self.bpy_context_scene.layers[i]):
@@ -2952,7 +2952,7 @@ class DaeExporter:
   self.node_names = {}
   self.transform_matrix_scale = self.config["transform_type"] == 'MATRIX_SCALE'
   self.image_cache = set()
-  self.triangulate = self.config["use_triangles"]
+  self.triangulate = False
   self.multichannel_single_clip = False
   self.axis_type = self.config['axis_type']
   self.use_tangents = False
@@ -2965,7 +2965,9 @@ class DaeExporter:
   elif self.config['tangents'] == 'ALWAYS':
    self.use_tangents = True
    self.always_tangent = True
-  self.overstuff_bones = self.config["overstuff_skin"]
+  self.overstuff_bones = False
+  self.use_active_layers = False
+  self.use_mesh_modifiers=True
 
 def save(operator, context,
    filepath="",

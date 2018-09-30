@@ -82,18 +82,6 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
         default='MATRIX',
         )
 
-    use_mesh_modifiers = BoolProperty(
-            name="Apply Modifiers",
-            description="Apply modifiers to mesh objects (on a copy!).",
-	    default=True,
-            )
-
-    use_triangles = BoolProperty(
-	    name="Triangulate",
-	    description="Export Triangles instead of Polygons.",
-	    default=False,
-	    )
-
     tangents = EnumProperty(
         name="Tangents",
         items=(('NONE', "None", "No tangents in mesh"),
@@ -106,11 +94,6 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
     use_copy_images = BoolProperty(
             name="Copy Images",
             description="Copy Images (create images/ subfolder)",
-            default=True,
-            )
-    use_active_layers = BoolProperty(
-            name="Active Layers",
-            description="Export only objects on the active layers.",
             default=True,
             )
 
@@ -128,13 +111,6 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
                ('STRIP', "Strips", "A clip for each action on the NLA tracks")),
         description="Style of animation clips",
         default='OBJECT',
-        )
-
-    overstuff_skin = BoolProperty(
-        name="Overstuff Skin",
-        description="Work around for some Collada and glTF loaders that incorrectly "
-            "assume every bone is added to the skinning controller",
-        default=False,
         )
 
     @property
