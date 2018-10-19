@@ -1551,6 +1551,7 @@ class DaeExporter:
 
   prev_id = nodes_lookup.get(node, None)
   if prev_id:
+   # previously exported node is occurring again
    node_id = prev_id
    instance_prev_node = True
   else:
@@ -1558,66 +1559,73 @@ class DaeExporter:
    nodes_lookup[node] = node_id
    instance_prev_node = False
 
+  instance_node=False
+  
   if instance_prev_node:
-   self.writel(
-    section, il, '<instance_node url="{}"/>'.format(self.ref_id(node_id)))
-   return
+   self.writel(section, il, '<instance_node url="{}">'.format(self.ref_id(node_id)))
+   instance_node=True
+   il += 1
+  else:
 
-  self.writel(section, il, '<node id="{}" name="{}" type="NODE">'.format(
-   node_id, node.name))
-  il += 1
-
-  transforms = self.get_node_transform_xml(node)
-  for t in transforms:
-   self.writel(section, il, t)
-
-  if (node.type == "ARMATURE"):
-   self.export_armature_node(section, node, il, lookup, recurse)
-  elif (node in lookup["node_to_skin"]):
-   count = 0
-   for skin_lookup in lookup["node_to_skin"][node]:
-    skin_id = skin_lookup['skin']
-    skeleton = skin_lookup['skeleton']
-    skin_sid = "skin" + str(count)
+   self.writel(section, il, '<node id="{}" name="{}" type="NODE">'.format(
+    node_id, node.name))
+   il += 1
+ 
+   transforms = self.get_node_transform_xml(node)
+   for t in transforms:
+    self.writel(section, il, t)
+ 
+   if (node.type == "ARMATURE"):
+    self.export_armature_node(section, node, il, lookup, recurse)
+   elif (node in lookup["node_to_skin"]):
+    count = 0
+    for skin_lookup in lookup["node_to_skin"][node]:
+     skin_id = skin_lookup['skin']
+     skeleton = skin_lookup['skeleton']
+     skin_sid = "skin" + str(count)
+     self.writel(section, il, '<instance_controller url="' +
+        self.ref_id(skin_id) + '" sid="' + skin_sid + '">')
+     self.writel(section, il + 1, '<skeleton>#' +
+        skeleton + '</skeleton>')
+     self.export_material_bind(section, node, il, lookup)
+     self.writel(section, il, "</instance_controller>")
+     count += 1
+   elif (node.data in lookup["mesh_morphs"]):
+    morph_id = lookup["mesh_to_morph_controller"][node.data][0]
+    morph_sid = "morph"
     self.writel(section, il, '<instance_controller url="' +
-       self.ref_id(skin_id) + '" sid="' + skin_sid + '">')
-    self.writel(section, il + 1, '<skeleton>#' +
-       skeleton + '</skeleton>')
+       self.ref_id(morph_id) + '" sid="' + morph_sid + '">')
     self.export_material_bind(section, node, il, lookup)
     self.writel(section, il, "</instance_controller>")
-    count += 1
-  elif (node.data in lookup["mesh_morphs"]):
-   morph_id = lookup["mesh_to_morph_controller"][node.data][0]
-   morph_sid = "morph"
-   self.writel(section, il, '<instance_controller url="' +
-      self.ref_id(morph_id) + '" sid="' + morph_sid + '">')
-   self.export_material_bind(section, node, il, lookup)
-   self.writel(section, il, "</instance_controller>")
-  elif (node in lookup["node_to_mesh"]):
-   mesh_id = lookup["node_to_mesh"][node]["id"]
-   self.writel(
-    section, il, '<instance_geometry url="' + self.ref_id(mesh_id) + '">')
-   self.export_material_bind(section, node, il, lookup)
-   self.writel(section, il, "</instance_geometry>")
-  elif (node.data in lookup["camera"]):
-   camera_id = lookup["camera"][node.data]
-   self.writel(
-    section, il, '<instance_camera url="' + self.ref_id(camera_id) + '"/>')
-  elif (node.data in lookup["light"]):
-   light_id = lookup["light"][node.data]
-   self.writel(
-    section, il, '<instance_light url="' + self.ref_id(light_id) + '"/>')
-
-  if node.dupli_group and node.dupli_type == "GROUP":
-   self.writel(
-    section, il, '<instance_node url="{}"/>'.format(self.ref_library(node.dupli_group)))
+   elif (node in lookup["node_to_mesh"]):
+    mesh_id = lookup["node_to_mesh"][node]["id"]
+    self.writel(
+     section, il, '<instance_geometry url="' + self.ref_id(mesh_id) + '">')
+    self.export_material_bind(section, node, il, lookup)
+    self.writel(section, il, "</instance_geometry>")
+   elif (node.data in lookup["camera"]):
+    camera_id = lookup["camera"][node.data]
+    self.writel(
+     section, il, '<instance_camera url="' + self.ref_id(camera_id) + '"/>')
+   elif (node.data in lookup["light"]):
+    light_id = lookup["light"][node.data]
+    self.writel(
+     section, il, '<instance_light url="' + self.ref_id(light_id) + '"/>')
+ 
+   if node.dupli_group and node.dupli_type == "GROUP":
+    self.writel(
+     section, il, '<instance_node url="{}"/>'.format(self.ref_library(node.dupli_group)))
 
   if recurse:
    for x in [child for child in node.children if child.parent_type!="BONE"]:
     self.export_node(section, x, il, lookup)
 
   il -= 1
-  self.writel(section, il, '</node>')
+  if not instance_node:
+   self.writel(section, il, '</node>')
+  else:
+   self.writel(section, il, '</instance_node>')
+   
 
  def ref_library(self, obj):
   id = obj.name
@@ -2225,6 +2233,7 @@ class DaeExporter:
   groups = self.get_groups()
 
   for group in groups:
+   # have to use specified group name because it may be referenced from external file
    group_id = group.name
    self.writel(S_LIBRARY_NODES, 1, '<node id="{}" name="{}" sid="GROUP" type="NODE">'.format(
     group_id, group_id))
