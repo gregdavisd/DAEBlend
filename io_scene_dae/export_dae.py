@@ -2721,7 +2721,9 @@ class DaeExporter:
      start = strip.frame_start
     if end < strip.frame_end:
      end = strip.frame_end
-
+  if start > end:
+   start=0
+   end=0
   return int(start), int(end)
 
  def get_NLA_track_timeline(self, track):
@@ -2732,7 +2734,9 @@ class DaeExporter:
     start = strip.frame_start
    if end < strip.frame_end:
     end = strip.frame_end
-
+  if start > end:
+   start=0
+   end=0  
   return int(start), int(end)
 
  def export_animations(self, lookup):
