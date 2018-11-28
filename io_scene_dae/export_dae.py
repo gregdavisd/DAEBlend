@@ -1590,8 +1590,8 @@ class DaeExporter:
      self.export_material_bind(section, node, il, lookup)
      self.writel(section, il, "</instance_controller>")
      count += 1
-   elif (node.data in lookup["mesh_morphs"]):
-    morph_id = lookup["mesh_to_morph_controller"][node.data][0]
+   elif (node.data in lookup["mesh_to_morph_controller"]):
+    morph_id = lookup["mesh_to_morph_controller"][node.data]['id']
     morph_sid = "morph"
     self.writel(section, il, '<instance_controller url="' +
        self.ref_id(morph_id) + '" sid="' + morph_sid + '">')
@@ -2831,7 +2831,7 @@ class DaeExporter:
    # [mesh]=mesh-convex id
    "convex_mesh": {},
    # [mesh][morph_id, blend value]
-   "mesh_morphs": {},
+   "mesh_to_morph_controller": {},
    # [camera(data)]=  id
    "camera": {},
    # [light(data)]=id
