@@ -2257,7 +2257,7 @@ class DaeExporter:
   self.writel(S_ASSET, 1, '<contributor>')
   self.writel(S_ASSET, 2, '<author> Anonymous </author>')
   self.writel(
-   S_ASSET, 2, '<authoring_tool> Collada Exporter for Blender 2.6+, by Gregery Barton (gregery20@yahoo.com.au) </authoring_tool>')
+   S_ASSET, 2, '<authoring_tool> Collada Exporter for Blender 2.79, by Gregery Barton (gregery20@yahoo.com.au) </authoring_tool>')
   self.writel(S_ASSET, 1, '</contributor>')
   self.writel(S_ASSET, 1, '<created>' +
      time.strftime("%Y-%m-%dT%H:%M:%SZ  ") + '</created>')
