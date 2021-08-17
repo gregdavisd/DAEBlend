@@ -204,7 +204,7 @@ class DaeExporter:
             return "#" + id
         else:
             return id
-        
+
     def export_sampler2d(self, imgid):
         sampler_sid = imgid + "-sampler"
         self.writel(S_FX, 3, '<newparam sid="' + sampler_sid + '">')
@@ -228,13 +228,13 @@ class DaeExporter:
         self.writel(S_FX, 4, '<' + shtype + '>')
 
         # Base Color
-        
+
         self.writel(S_FX, 5, '<diffuse>')
-        self.writel(S_FX, 6, '<color>' + numarr_alpha(material.diffuse_color) + ' </color>')
+        self.writel(S_FX, 6, '<color>' +
+                    numarr_alpha(material.diffuse_color) + ' </color>')
         self.writel(S_FX, 5, '</diffuse>')
 
         self.writel(S_FX, 4, '</' + shtype + '>')
-
 
         self.writel(S_FX, 3, '</technique>')
         self.writel(S_FX, 2, '</profile_COMMON>')
@@ -247,8 +247,6 @@ class DaeExporter:
 
         if not mesh or not len(mesh.polygons):
             # mesh has no polygons so abort
-            if mesh and (mesh != node.data):
-                bpy.data.meshes.remove(mesh)
             return None
 
         # force triangulation if the mesh has polygons with more than 4 sides
@@ -268,7 +266,6 @@ class DaeExporter:
             bm.free()
             mesh.update(calc_edges=True, calc_edges_loose=False)
 
-        
         if not mesh.has_custom_normals and mesh.use_auto_smooth:
             mesh.calc_normals_split()
 
@@ -327,8 +324,10 @@ class DaeExporter:
         surface_bitangent_indices = {}
         bitangents = []
         if self.use_tangents:
-            tangents, surface_tangent_indices = self.loop_property_to_indexed(loop_vertices, "tangent")
-            bitangents, surface_bitangent_indices = self.loop_property_to_indexed(loop_vertices, "bitangent")
+            tangents, surface_tangent_indices = self.loop_property_to_indexed(
+                loop_vertices, "tangent")
+            bitangents, surface_bitangent_indices = self.loop_property_to_indexed(
+                loop_vertices, "bitangent")
 
         # get uv's
         if (mesh.uv_layers != None) and (mesh.uv_layers.active != None):
@@ -443,9 +442,9 @@ class DaeExporter:
     def node_has_convex_hull(self, node):
         if (node.rigid_body and
             node.rigid_body.collision_shape == 'CONVEX_HULL' and
-            node.rigid_body.mesh_source == 'BASE'):
-                return True
-        
+                node.rigid_body.mesh_source == 'BASE'):
+            return True
+
         return False
 
     def mesh_to_convex_hull(self, mesh):
@@ -457,7 +456,7 @@ class DaeExporter:
         for vert in mesh.vertices.values():
             bm.verts.new(vert.co)
         bm.verts.ensure_lookup_table()
- 
+
         # Generate hull
         ret = bmesh.ops.convex_hull(
             bm, input=bm.verts, use_existing_faces=False)
@@ -469,24 +468,23 @@ class DaeExporter:
         # delete vertices
         bmesh.ops.delete(bm, geom=geom, context=1)
 
-
         # convert bmesh back to mesh
         me = bpy.data.meshes.new(self.new_id("DAE_convex_hull"))
         bm.to_mesh(me)
         return me
 
     def export_meshes(self, depsgraph, lookup):
- 
+
         convex_geometry_lookup = lookup["convex_mesh"]
         node_to_mesh_lookup = lookup["node_to_mesh"]
 
         mesh_nodes = {node for node in self.visual_nodes
                       if (node.type == "MESH" or node.type == "CURVE")}
-        
+
         for node in mesh_nodes:
             if (node.data in node_to_mesh_lookup):
                 continue
-            
+
             # generate mesh from node
 
             mesh = self.get_mesh(depsgraph, node)
@@ -511,9 +509,8 @@ class DaeExporter:
                 morphs = self.export_mesh_morphs(node, mesh_id)
 
                 mesh_lookup = {"id": mesh_id,
-                            "material_bind": material_bind, "morphs": morphs}
+                               "material_bind": material_bind, "morphs": morphs}
                 node_to_mesh_lookup[node.data] = mesh_lookup
-
 
             else:
                 if(node.type == "CURVE"):
@@ -521,9 +518,8 @@ class DaeExporter:
                     curve_id = self.get_node_id(node.data.name + "-curve")
                     self.export_curve(node.data, curve_id)
                     curve_lookup = {"id": curve_id,
-                                "material_bind": None, "morphs": None}
+                                    "material_bind": None, "morphs": None}
                     node_to_mesh_lookup[node.data] = curve_lookup
- 
 
     def export_mesh_morphs(self, node, mesh_id):
         mesh = node.data
@@ -682,7 +678,6 @@ class DaeExporter:
 
         mesh = self.get_mesh(depsgraph, node)
 
-
         self.writel(S_SKIN, 1, '<controller id="' + skin_id + '">')
         self.writel(S_SKIN, 2, '<skin source="' + self.ref_id(mesh_id) + '">')
         self.writel(S_SKIN, 3, '<bind_shape_matrix>' +
@@ -704,10 +699,10 @@ class DaeExporter:
         self.writel(S_SKIN, 3, '</source>')
 
         # Pose Matrices!
-        
+
         bones = [armature.data.bones[name] for name in group_names]
         pose_matrices = [bone.matrix_local.inverted() for bone in bones]
-        
+
         self.writel(S_SKIN, 3, '<source id="' + skin_id + '-bind_poses">')
         pose_values = " ".join([self.strmtx(matrix)
                                 for matrix in pose_matrices])
@@ -722,7 +717,7 @@ class DaeExporter:
         self.writel(S_SKIN, 3, '</source>')
 
         # Skin Weights!
-        
+
         weights = list(
             {group.weight for v in mesh.vertices for group in v.groups})
         weights_index = {k: v for (v, k) in enumerate(weights)}
@@ -730,7 +725,7 @@ class DaeExporter:
                             weights_index[g.weight]] for g in v.groups] for v in mesh.vertices]
         vertex_weights = [[g for g in v if g[0] != -1] for v in vertex_weights]
         weight_counts = [len(v) for v in vertex_weights]
-        
+
         self.writel(S_SKIN, 3, '<source id="' + skin_id + '-weights">')
         self.writel(S_SKIN, 4, '<float_array id="' + skin_id + '-weights-array" count="' +
                     str(len(weights)) + '">' + " ".join([strflt(w) for w in weights]) + '</float_array>')
@@ -1034,7 +1029,6 @@ class DaeExporter:
         self.node_names[name] = count + 1
         return node_id
 
-
     def save_scene_pose(self):
         self.pose_state = {}
         for node in self.bpy_context_scene.objects:
@@ -1055,8 +1049,7 @@ class DaeExporter:
         for node, pose_position in self.pose_state.items():
             node.data.pose_position = pose_position
         bpy.context.view_layer.update()
-    
-    
+
     def get_bone_deform_parent(self, bone):
         return bone.parent
 
@@ -1456,11 +1449,11 @@ class DaeExporter:
                     self.writel(section, il, "</instance_geometry>")
                 elif (node.data in lookup["camera"]):
                     camera_id = lookup["camera"][node.data]
-                    self.writel(section, il, 
+                    self.writel(section, il,
                                 '<instance_camera url="' + self.ref_id(camera_id) + '"/>')
                 elif (node.data in lookup["light"]):
                     light_id = lookup["light"][node.data]
-                    self.writel(section, il, 
+                    self.writel(section, il,
                                 '<instance_light url="' + self.ref_id(light_id) + '"/>')
             else:
                 if node.instance_type == "COLLECTION":
@@ -1511,7 +1504,8 @@ class DaeExporter:
             return
         if not len([slot.material for slot in node.material_slots if slot.material]):
             return
-        material_bind = lookup["node_to_mesh"][node.data].get("material_bind", None)
+        material_bind = lookup["node_to_mesh"][node.data].get(
+            "material_bind", None)
         if not material_bind:
             return
 
@@ -1545,7 +1539,7 @@ class DaeExporter:
             for slot in n.material_slots if slot.material and not slot.material.library
             if slot.material not in material_lookup}
 
-         # export library_effects content
+        # export library_effects content
 
         for mat in materials:
             effect_id = self.get_node_id(mat.name + "-effect")
@@ -1845,11 +1839,15 @@ class DaeExporter:
 
     def export_mesh_shape(self, node, il, lookup):
         convex, mesh_id = self.get_physics_mesh_id(node, lookup)
-        self.writel(S_P_MODEL, il, '<instance_geometry url="{}"/>'.format(self.ref_id(mesh_id)))
+        self.writel(
+            S_P_MODEL, il, '<instance_geometry url="{}"/>'.format(self.ref_id(mesh_id)))
 
     def export_collections(self, lookup):
 
         for collection in bpy.data.collections:
+            if len(collection.users_dupli_group) == 0:
+                # don't export unused collections
+                continue
             collection_id = self.get_node_id(collection.name)
             self.writel(S_LIBRARY_NODES, 1, '<node id="{}" name="{}" sid="COLLECTION" type="NODE">'
                         .format(collection_id, collection.name))
@@ -2099,7 +2097,8 @@ class DaeExporter:
         for orig_node in self.visual_nodes:
             if (orig_node in linked_nodes):
                 continue
-            node = orig_node.evaluated_get(bpy.context.evaluated_depsgraph_get())
+            node = orig_node.evaluated_get(
+                bpy.context.evaluated_depsgraph_get())
             if orig_node.data in lookup["mesh_to_morph_controller"]:
                 node_id = lookup["nodes"][orig_node]
                 morph_controller = lookup["mesh_to_morph_controller"][orig_node.data]
@@ -2123,12 +2122,14 @@ class DaeExporter:
 
                 for bone in node.data.bones:
 
-                    bone_node_id = lookup["skeleton_info"][orig_node].get(bone.name, None)
+                    bone_node_id = lookup["skeleton_info"][orig_node].get(
+                        bone.name, None)
                     if not bone_node_id:
                         continue
 
                     posebone = node.pose.bones[bone.name]
-                    transform = self.get_posebone_transform(node.pose.bones, posebone)
+                    transform = self.get_posebone_transform(
+                        node.pose.bones, posebone)
                     if transform:
                         if (not (bone_node_id in xform_cache)):
                             xform_cache[bone_node_id] = []
@@ -2357,8 +2358,8 @@ class DaeExporter:
     def export_animations(self, lookup):
 
         if self.config["use_anim_timeline"]:
-            self.export_timeline(self.get_node_id(self.get_scene_name(self.bpy_context_scene)) + "-timeline", 
-                                 self.bpy_context_scene.frame_start, self.bpy_context_scene.frame_end, 
+            self.export_timeline(self.get_node_id(self.get_scene_name(self.bpy_context_scene)) + "-timeline",
+                                 self.bpy_context_scene.frame_start, self.bpy_context_scene.frame_end,
                                  lookup)
 
         if self.config["clip_type"] != 'NONE':
@@ -2487,8 +2488,8 @@ class DaeExporter:
                 self.export_scene(lookup)
 
                 physics_nodes = [node
-                                    for node in self.visual_nodes
-                                    if (node.rigid_body and node.rigid_body.collision_shape)]
+                                 for node in self.visual_nodes
+                                 if (node.rigid_body and node.rigid_body.collision_shape)]
                 self.export_physics_nodes(physics_nodes, lookup)
 
             finally:
@@ -2572,6 +2573,7 @@ class DaeExporter:
         self.use_tangents = self.config['calc_tangents']
         self.overstuff_bones = False
         self.use_active_layers = False
+
 
 def save(operator, context,
          filepath="",
