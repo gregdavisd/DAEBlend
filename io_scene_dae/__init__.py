@@ -98,7 +98,7 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
     use_anim_timeline: BoolProperty(
         name="Timeline",
         description=("Export the main timeline animation"),
-        default=True,
+        default=False,
     )
 
     clip_type: EnumProperty(
@@ -108,7 +108,7 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
                ('TRACK', "Tracks", "A clip for each NLA track"),
                ('STRIP', "Strips", "A clip for each action on the NLA tracks")),
         description="Style of animation clips",
-        default='OBJECT',
+        default='TRACK',
     )
 
     @property
@@ -117,11 +117,11 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
 
     def check(self, context):
         return True
- 
+
     def execute(self, context):
         if not self.filepath:
             raise Exception("filepath not set")
- 
+
         keywords = self.as_keywords(ignore=("axis_forward",
                                             "axis_up",
                                             "global_scale",
