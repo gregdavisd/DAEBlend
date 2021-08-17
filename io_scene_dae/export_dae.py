@@ -1089,13 +1089,12 @@ class DaeExporter:
     def get_bone_transform_xml(self, bone):
         return self.transform_to_xml(self.get_bone_transform(bone))
 
-    def export_armature_bone(self, section, bone, il, si, lookup, parenting_map, recurse=True):
+    def export_armature_bone(self, section, bone, il, armature, lookup, parenting_map, recurse=True):
 
-        boneid = self.get_node_id(bone.name)
-        bonesid = bone.name
-        si[bone.name] = boneid
-        self.writel(section, il, '<node id="' + boneid + '" sid="' +
-                    bonesid + '" name="' + bone.name + '" type="JOINT">')
+        boneid = lookup["nodes"][armature] + "/" + bone.name
+        lookup["skeleton_info"][armature][bone.name] = boneid
+        self.writel(section, il, '<node sid="' + bone.name +
+                    '" name="'+bone.name+'" type="JOINT">')
         il += 1
 
         transforms = self.get_bone_transform_xml(bone)
@@ -1111,7 +1110,7 @@ class DaeExporter:
 
         for c in bone.children:
             self.export_armature_bone(
-                section, c, il, si, lookup, parenting_map, recurse)
+                section, c, il, armature, lookup, parenting_map, recurse)
         il -= 1
         self.writel(section, il, '</node>')
 
@@ -1122,13 +1121,13 @@ class DaeExporter:
 
         lookup["skeleton_info"][node] = {}
 
-        for b in armature.bones:
-            if (b.parent != None):
+        for bone in armature.bones:
+            if (bone.parent != None):
                 # this node will be exported when the parent exports its
                 # children
                 continue
             self.export_armature_bone(
-                section, b, il, lookup["skeleton_info"][node], lookup, parenting_map, recurse)
+                section, bone, il, node, lookup, parenting_map, recurse)
 
     def export_cameras(self, lookup):
         camera_lookup = lookup["camera"]
@@ -1388,16 +1387,15 @@ class DaeExporter:
 
     def export_node(self, section, node, il, lookup, recurse=True):
         # export a scene node as a Collada node
-        nodes_lookup = lookup["nodes"]
 
-        prev_id = nodes_lookup.get(node, None)
+        prev_id = lookup["nodes"].get(node, None)
         if prev_id:
             # previously exported node is occurring again
             node_id = prev_id
             instance_prev_node = True
         else:
             node_id = self.get_node_id(node.name)
-            nodes_lookup[node] = node_id
+            lookup["nodes"][node] = node_id
             instance_prev_node = False
 
         instance_node = False
