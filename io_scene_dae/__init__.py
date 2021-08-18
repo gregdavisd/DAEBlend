@@ -44,7 +44,7 @@ if "bpy" in locals():
 
 
 class ExportDAE(bpy.types.Operator, ExportHelper):
-    '''Selection to DAE'''
+    '''Export to DAE'''
     bl_idname = "export_scene.dae"
     bl_label = "Export DAE"
     bl_options = {'PRESET'}
@@ -89,26 +89,26 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
         default=False,
     )
 
-    use_copy_images: BoolProperty(
-        name="Copy Images",
-        description="Copy Images (create images/ subfolder)",
-        default=True,
-    )
+    # use_copy_images: BoolProperty(
+    #     name="Copy Images",
+    #     description="Copy Images (create images/ subfolder)",
+    #     default=True,
+    # )
 
     use_anim_timeline: BoolProperty(
         name="Timeline",
         description=("Export the main timeline animation"),
-        default=False,
+        default=True,
     )
 
     clip_type: EnumProperty(
-        name="Clips",
+        name="NLA Clips",
         items=(('NONE', "None", "No animation clips"),
                ('OBJECT', "Objects", "Blended tracks for each object in the NLA editor"),
                ('TRACK', "Tracks", "A clip for each NLA track"),
                ('STRIP', "Strips", "A clip for each action on the NLA tracks")),
         description="Style of animation clips",
-        default='TRACK',
+        default='NONE',
     )
 
     @property
@@ -135,7 +135,7 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
 
 
 def menu_func(self, context):
-    self.layout.operator(ExportDAE.bl_idname, text="Export Collada (.dae)")
+    self.layout.operator(ExportDAE.bl_idname, text="Collada (Python script) (.dae)")
 
 
 def register():

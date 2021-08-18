@@ -243,7 +243,8 @@ class DaeExporter:
     def get_mesh(self, depsgraph, node):
 
         # get a mesh for this node
-        mesh = node.to_mesh(preserve_all_data_layers=True, depsgraph=depsgraph)
+        mesh = node.evaluated_get(depsgraph).to_mesh(
+            preserve_all_data_layers=True, depsgraph=depsgraph)
 
         if not mesh or not len(mesh.polygons):
             # mesh has no polygons so abort
@@ -479,7 +480,10 @@ class DaeExporter:
                       if (node.type == "MESH" or node.type == "CURVE")}
 
         for node in mesh_nodes:
-            if (node.data in lookup["node_to_mesh"]):
+            has_modifiers = self.node_has_generate_modifiers(node)
+            if (not has_modifiers and node.data in lookup["data_to_mesh"]):
+                # A linked duplicate with no modifiers to make it any different from the original
+                lookup["node_to_mesh"][node] = lookup["data_to_mesh"][node.data]
                 continue
 
             # generate mesh from node
@@ -507,7 +511,12 @@ class DaeExporter:
 
                 mesh_lookup = {"id": mesh_id,
                                "material_bind": material_bind, "morphs": morphs}
-                lookup["node_to_mesh"][node.data] = mesh_lookup
+                lookup["node_to_mesh"][node] = mesh_lookup
+
+                # Modifiers will generate a different mesh even if it uses the same mesh data
+                # so dont' rememer this generated mesh for later instancing
+                if not has_modifiers:
+                    lookup["data_to_mesh"][node.data] = mesh_lookup
 
             else:
                 if(node.type == "CURVE"):
@@ -516,7 +525,7 @@ class DaeExporter:
                     self.export_curve(node.data, curve_id)
                     curve_lookup = {"id": curve_id,
                                     "material_bind": None, "morphs": None}
-                    lookup["node_to_mesh"][node.data] = curve_lookup
+                    lookup["node_to_mesh"][node] = curve_lookup
 
     def export_mesh_morphs(self, node, mesh_id):
         mesh = node.data
@@ -561,8 +570,8 @@ class DaeExporter:
 
     def export_morph_controllers(self, depsgraph, lookup):
         geometry_morphs = {
-            node: value for node, value in lookup["node_to_mesh"].items() 
-            if value["morphs"] != None and node not in lookup["mesh_to_morph_controller"] 
+            node: value for node, value in lookup["node_to_mesh"].items()
+            if value["morphs"] != None and node not in lookup["mesh_to_morph_controller"]
             and node in self.visual_nodes}
         for node, values in geometry_morphs.items():
             if node.data not in lookup["mesh_to_morph_controller"]:
@@ -644,7 +653,7 @@ class DaeExporter:
                 if (not node in lookup["node_to_skin"]):
                     lookup["node_to_skin"][node] = []
                 lookup["node_to_skin"][node].append(lu)
-                mesh_id = lookup["node_to_mesh"][node.data]["id"]
+                mesh_id = lookup["node_to_mesh"][node]["id"]
                 morph = lookup["mesh_to_morph_controller"].get(node.data, None)
                 if morph:
                     attached_id = morph["id"]
@@ -1427,8 +1436,8 @@ class DaeExporter:
                                 self.ref_id(morph_id) + '" sid="' + morph_sid + '">')
                     self.export_material_bind(section, node, il, lookup)
                     self.writel(section, il, "</instance_controller>")
-                elif (node.data in lookup["node_to_mesh"]):
-                    mesh_id = lookup["node_to_mesh"][node.data]["id"]
+                elif (node in lookup["node_to_mesh"]):
+                    mesh_id = lookup["node_to_mesh"][node]["id"]
                     self.writel(
                         section, il, '<instance_geometry url="' + self.ref_id(mesh_id) + '">')
                     self.export_material_bind(section, node, il, lookup)
@@ -1490,7 +1499,7 @@ class DaeExporter:
             return
         if not len([slot.material for slot in node.material_slots if slot.material]):
             return
-        material_bind = lookup["node_to_mesh"][node.data].get(
+        material_bind = lookup["node_to_mesh"][node].get(
             "material_bind", None)
         if not material_bind:
             return
@@ -1813,7 +1822,7 @@ class DaeExporter:
         else:
             self.writel(
                 S_P_MODEL, il, '<convex_mesh convex_hull_of="{}"/>'
-                .format(self.ref_id(lookup["node_to_mesh"][node.data]["id"])))
+                .format(self.ref_id(lookup["node_to_mesh"][node]["id"])))
 
     def export_mesh_shape(self, node, il, lookup):
         convex, mesh_id = self.get_physics_mesh_id(node, lookup)
@@ -1849,7 +1858,7 @@ class DaeExporter:
         self.writel(S_ASSET, 1, '<contributor>')
         self.writel(S_ASSET, 2, '<author> Anonymous </author>')
         self.writel(
-            S_ASSET, 2, '<authoring_tool> Collada Exporter for Blender 2.6+, by Gregery Barton (gregery20@yahoo.com.au) </authoring_tool>')
+            S_ASSET, 2, '<authoring_tool> Collada Exporter for Blender 2.9+, by Gregery Barton </authoring_tool>')
         self.writel(S_ASSET, 1, '</contributor>')
         self.writel(S_ASSET, 1, '<created>' +
                     time.strftime("%Y-%m-%dT%H:%M:%SZ  ") + '</created>')
@@ -2432,6 +2441,9 @@ class DaeExporter:
             # [node.data/node.game]=id
             "physics_material": {},
             "physics_rigid_body": {},
+            # node.data to generated mesh
+            "data_to_mesh": {},
+            # node to generated mesh
             "node_to_mesh": {},
         }
 
