@@ -156,6 +156,12 @@ class DaeExporter:
         p = p.replace("\\\\", "/")
         return p
 
+    def ref_id(self, id):
+        if "#" not in id:
+            return "#" + id
+        else:
+            return id
+
     def export_image(self, image, image_id):
 
         backup_image_path = image.filepath
@@ -199,12 +205,6 @@ class DaeExporter:
 
         self.writel(S_IMGS, 1, '</image>')
 
-    def ref_id(self, id):
-        if "#" not in id:
-            return "#" + id
-        else:
-            return id
-
     def export_sampler2d(self, imgid):
         sampler_sid = imgid + "-sampler"
         self.writel(S_FX, 3, '<newparam sid="' + sampler_sid + '">')
@@ -217,7 +217,7 @@ class DaeExporter:
 
         return sampler_sid
 
-    def export_effect(self, material, effect_id, image_lookup):
+    def export_effect(self, material, effect_id):
 
         self.writel(S_FX, 1, '<effect id="' + effect_id +
                     '" name="' + material.name + '">')
@@ -475,14 +475,11 @@ class DaeExporter:
 
     def export_meshes(self, depsgraph, lookup):
 
-        convex_geometry_lookup = lookup["convex_mesh"]
-        node_to_mesh_lookup = lookup["node_to_mesh"]
-
         mesh_nodes = {node for node in self.visual_nodes
                       if (node.type == "MESH" or node.type == "CURVE")}
 
         for node in mesh_nodes:
-            if (node.data in node_to_mesh_lookup):
+            if (node.data in lookup["node_to_mesh"]):
                 continue
 
             # generate mesh from node
@@ -502,7 +499,7 @@ class DaeExporter:
                     convex_mesh_id = mesh_id + "-convex"
                     self.export_mesh(
                         convex_mesh, convex_mesh_id, node.data.name, True)
-                    convex_geometry_lookup[node] = convex_mesh_id
+                    lookup["convex_mesh"][node] = convex_mesh_id
 
                 # export morphs from shape keys
 
@@ -510,7 +507,7 @@ class DaeExporter:
 
                 mesh_lookup = {"id": mesh_id,
                                "material_bind": material_bind, "morphs": morphs}
-                node_to_mesh_lookup[node.data] = mesh_lookup
+                lookup["node_to_mesh"][node.data] = mesh_lookup
 
             else:
                 if(node.type == "CURVE"):
@@ -519,7 +516,7 @@ class DaeExporter:
                     self.export_curve(node.data, curve_id)
                     curve_lookup = {"id": curve_id,
                                     "material_bind": None, "morphs": None}
-                    node_to_mesh_lookup[node.data] = curve_lookup
+                    lookup["node_to_mesh"][node.data] = curve_lookup
 
     def export_mesh_morphs(self, node, mesh_id):
         mesh = node.data
@@ -563,15 +560,15 @@ class DaeExporter:
             return None
 
     def export_morph_controllers(self, depsgraph, lookup):
-        node_to_mesh_lookup = lookup["node_to_mesh"]
-        morph_controller_lookup = lookup["mesh_to_morph_controller"]
-        geometry_morphs = {node: value for node, value in node_to_mesh_lookup.items(
-        ) if value["morphs"] != None and node not in morph_controller_lookup and node in self.visual_nodes}
+        geometry_morphs = {
+            node: value for node, value in lookup["node_to_mesh"].items() 
+            if value["morphs"] != None and node not in lookup["mesh_to_morph_controller"] 
+            and node in self.visual_nodes}
         for node, values in geometry_morphs.items():
-            if node.data not in morph_controller_lookup:
+            if node.data not in lookup["mesh_to_morph_controller"]:
                 morph_id = self.get_node_id(node.data.name + "-morph")
                 targets = values["morphs"]
-                morph_controller_lookup[node.data] = {
+                lookup["mesh_to_morph_controller"][node.data] = {
                     "id": morph_id, "targets": targets}
                 self.export_morph_controller(values["id"], targets, morph_id)
 
@@ -634,14 +631,9 @@ class DaeExporter:
         return next((self.node_skin_modifiers(node)), None) != None
 
     def export_skin_controllers(self, depsgraph, lookup):
-
-        morph_controller_lookup = lookup["mesh_to_morph_controller"]
-        skin_controller_lookup = lookup["node_to_skin"]
-        node_to_mesh_lookup = lookup["node_to_mesh"]
-
         meshes = {node
                   for node in self.visual_nodes
-                  if node not in skin_controller_lookup and self.node_has_skin_modifier(node)}
+                  if node not in lookup["node_to_skin"] and self.node_has_skin_modifier(node)}
 
         for node in meshes:
             armatures = self.node_skin_modifiers(node)
@@ -649,11 +641,11 @@ class DaeExporter:
                 skin_id = self.get_node_id(
                     node.name + "-" + armature.object.name + "-skin")
                 lu = {"skin": skin_id, "skeleton": armature.object.name}
-                if (not node in skin_controller_lookup):
-                    skin_controller_lookup[node] = []
-                skin_controller_lookup[node].append(lu)
-                mesh_id = node_to_mesh_lookup[node.data]["id"]
-                morph = morph_controller_lookup.get(node.data, None)
+                if (not node in lookup["node_to_skin"]):
+                    lookup["node_to_skin"][node] = []
+                lookup["node_to_skin"][node].append(lu)
+                mesh_id = lookup["node_to_mesh"][node.data]["id"]
+                morph = lookup["mesh_to_morph_controller"].get(node.data, None)
                 if morph:
                     attached_id = morph["id"]
                 else:
@@ -1089,7 +1081,7 @@ class DaeExporter:
     def get_bone_transform_xml(self, bone):
         return self.transform_to_xml(self.get_bone_transform(bone))
 
-    def export_armature_bone(self, section, bone, il, armature, lookup, parenting_map, recurse=True):
+    def export_armature_bone(self, section, il, bone, armature, parenting_map, recurse, lookup):
 
         boneid = lookup["nodes"][armature] + "/" + bone.name
         lookup["skeleton_info"][armature][bone.name] = boneid
@@ -1106,15 +1098,15 @@ class DaeExporter:
         node_children = parenting_map.get(bone.name, None)
         if (recurse and node_children):
             for c in node_children:
-                self.export_node(section, c, il, lookup, recurse)
+                self.export_node(section, c, il, recurse, lookup)
 
         for c in bone.children:
             self.export_armature_bone(
-                section, c, il, armature, lookup, parenting_map, recurse)
+                section, il, c, armature, parenting_map, recurse, lookup)
         il -= 1
         self.writel(section, il, '</node>')
 
-    def export_armature_node(self, section, node, il, lookup, recurse=True):
+    def export_armature_node(self, section, il, node, recurse, lookup):
         parenting_map = self.get_armature_children_of_bones(node)
 
         armature = node.data
@@ -1127,16 +1119,15 @@ class DaeExporter:
                 # children
                 continue
             self.export_armature_bone(
-                section, bone, il, node, lookup, parenting_map, recurse)
+                section, il, bone, node, parenting_map, recurse, lookup)
 
     def export_cameras(self, lookup):
-        camera_lookup = lookup["camera"]
         cameras = {node.data for node in self.visual_nodes if node.type ==
-                   "CAMERA" and node.data not in camera_lookup}
+                   "CAMERA" and node.data not in lookup["camera"]}
 
         for camera in cameras:
             camera_id = self.get_node_id(camera.name + "-camera")
-            camera_lookup[camera] = camera_id
+            lookup["camera"][camera] = camera_id
             self.export_camera(camera, camera_id)
 
     def export_camera(self, camera, camera_id):
@@ -1173,15 +1164,12 @@ class DaeExporter:
         self.writel(S_CAMS, 1, '</camera>')
 
     def export_lights(self, lookup):
-        light_lookup = lookup["light"]
         lights = {node.data for node in self.visual_nodes if node.type ==
-                  "LIGHT" and node.data not in light_lookup}
+                  "LIGHT" and node.data not in lookup["light"]}
         for light in lights:
             light_id = self.get_node_id(light.name + "-light")
-            light_lookup[light] = light_id
+            lookup["light"][light] = light_id
             self.export_lamp(light, light_id)
-
-        return light_lookup
 
     def export_lamp(self, light, light_id):
 
@@ -1385,7 +1373,7 @@ class DaeExporter:
     def get_matrix_transform_xml(self, matrix):
         return['<matrix sid="transform">' + self.strmtx(matrix) + '</matrix>']
 
-    def export_node(self, section, node, il, lookup, recurse=True):
+    def export_node(self, section, node, il, recurse, lookup):
         # export a scene node as a Collada node
 
         prev_id = lookup["nodes"].get(node, None)
@@ -1418,7 +1406,7 @@ class DaeExporter:
             if (not node.is_instancer):
                 if (node.type == "ARMATURE"):
                     self.export_armature_node(
-                        section, node, il, lookup, recurse)
+                        section, il, node, recurse, lookup)
                 elif (node in lookup["node_to_skin"]):
                     count = 0
                     for skin_lookup in lookup["node_to_skin"][node]:
@@ -1460,7 +1448,7 @@ class DaeExporter:
 
         if recurse:
             for x in [child for child in node.children if child.parent_type != "BONE"]:
-                self.export_node(section, x, il, lookup)
+                self.export_node(section, x, il, recurse, lookup)
 
         il -= 1
         if not instance_node:
@@ -1526,29 +1514,25 @@ class DaeExporter:
 
     def export_materials(self, lookup):
 
-        material_lookup = lookup["material"]
-        effect_lookup = lookup["effect"]
-        image_lookup = lookup["image"]
-
         # get materials for export
         materials = {
             slot.material for n in self.visual_nodes
             if hasattr(n, "material_slots")
             for slot in n.material_slots if slot.material and not slot.material.library
-            if slot.material not in material_lookup}
+            if slot.material not in lookup["material"]}
 
         # export library_effects content
 
         for mat in materials:
             effect_id = self.get_node_id(mat.name + "-effect")
-            effect_lookup[mat] = effect_id
-            self.export_effect(mat, effect_id, image_lookup)
+            lookup["effect"][mat] = effect_id
+            self.export_effect(mat, effect_id)
 
         # export library_materials content
         for mat in materials:
             material_id = self.get_node_id(mat.name + "-material")
-            self.export_material(mat, material_id, effect_lookup[mat])
-            material_lookup[mat] = material_id
+            self.export_material(mat, material_id, lookup["effect"][mat])
+            lookup["material"][mat] = material_id
 
     def external_ref(self, library, id):
         return "./" + os.path.splitext(urlparse(library.filepath).netloc)[0].replace("\\", "/") + ".dae" + self.ref_id(id)
@@ -1596,12 +1580,11 @@ class DaeExporter:
         self.export_physics_scene(physics_nodes, lookup)
 
     def export_physics_materials(self, physics_nodes, lookup):
-        physics_materials_lookup = lookup["physics_material"]
         for node in physics_nodes:
-            if (not node.data in physics_materials_lookup):
+            if (not node.data in lookup["physics_material"]):
                 physics_material_id = self.get_node_id(
                     node.data.name + '-phys_mat')
-                physics_materials_lookup[node.data] = physics_material_id
+                lookup["physics_material"][node.data] = physics_material_id
                 self.export_physics_material(node, physics_material_id)
 
     def export_physics_material(self, node, physics_material_id):
@@ -1618,17 +1601,14 @@ class DaeExporter:
         self.writel(S_P_MATS, 1, '</physics_material>')
 
     def export_physics_rigid_body_models(self, physics_nodes, lookup):
-        physics_materials_lookup = lookup["physics_material"]
-        physics_rigid_body_lookup = lookup["physics_rigid_body"]
         for node in physics_nodes:
-            if (not node.data in physics_rigid_body_lookup):
+            if (not node.data in lookup["physics_rigid_body"]):
                 physics_model_id = self.get_node_id(node.data.name + '-model')
                 physics_body_sid = self.get_node_id(node.data.name + '-body')
-                physics_rigid_body_lookup[node.data] = {
+                lookup["physics_rigid_body"][node.data] = {
                     'model_id': physics_model_id, 'body_sid': physics_body_sid}
                 self.export_physics_rigid_body_model(
                     node, physics_model_id, physics_body_sid, lookup)
-        return physics_rigid_body_lookup
 
     def export_physics_rigid_body_model(self, node, physics_model_id, physics_body_sid, lookup):
         self.writel(
@@ -1850,7 +1830,7 @@ class DaeExporter:
             self.writel(S_LIBRARY_NODES, 1, '<node id="{}" name="{}" sid="COLLECTION" type="NODE">'
                         .format(collection_id, collection.name))
             for obj in collection.objects:
-                self.export_node(S_LIBRARY_NODES, obj, 2, lookup, False)
+                self.export_node(S_LIBRARY_NODES, obj, 2, False, lookup)
             self.writel(S_LIBRARY_NODES, 1, '</node>')
 
     def export_scene(self, lookup):
@@ -1860,7 +1840,7 @@ class DaeExporter:
 
         for obj in self.visual_nodes:
             if (obj.parent == None):
-                self.export_node(S_NODES, obj, 2, lookup)
+                self.export_node(S_NODES, obj, 2, True, lookup)
 
         self.writel(S_NODES, 1, '</visual_scene>')
 
@@ -2061,7 +2041,7 @@ class DaeExporter:
         rest_xform_cache = {}
         rest_blend_cache = {}
         self.rest_scene()
-        self.cache_scene(rest_xform_cache, rest_blend_cache, lookup, 0)
+        self.cache_scene(rest_xform_cache, rest_blend_cache, 0, lookup)
         self.restore_scene_pose()
 
         frame_orig = self.bpy_context_scene.frame_current
@@ -2079,7 +2059,7 @@ class DaeExporter:
         for t in range(start, end + 1):
             self.bpy_context_scene.frame_set(t)
             key = (t - 1) * frame_len
-            self.cache_scene(xform_cache, blend_cache, lookup, key)
+            self.cache_scene(xform_cache, blend_cache, key, lookup)
 
         self.bpy_context_scene.frame_set(frame_orig)
 
@@ -2090,11 +2070,8 @@ class DaeExporter:
 
         return xform_cache, blend_cache
 
-    def cache_scene(self, xform_cache, blend_cache, lookup, key):
-        linked_nodes = lookup["scene_linked_nodes"]
+    def cache_scene(self, xform_cache, blend_cache, key, lookup):
         for orig_node in self.visual_nodes:
-            if (orig_node in linked_nodes):
-                continue
             node = orig_node.evaluated_get(
                 bpy.context.evaluated_depsgraph_get())
             if orig_node.data in lookup["mesh_to_morph_controller"]:
@@ -2456,7 +2433,6 @@ class DaeExporter:
             "physics_material": {},
             "physics_rigid_body": {},
             "node_to_mesh": {},
-            "scene_linked_nodes": {}
         }
 
         self.bpy_context_scene = bpy.context.scene
@@ -2467,8 +2443,6 @@ class DaeExporter:
 
         for scene in scenes:
             try:
-                lookup["scene_linked_nodes"] = set(
-                    lookup["nodes"].keys()).intersection(scene.objects)
                 self.bpy_context_scene = scene
 
                 self.save_scene_pose()
