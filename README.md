@@ -1,5 +1,6 @@
 # Blender-Collada
-Python script to export Collada Version 1.5 DAE files from Blender.
+Python script to export Collada Version 1.5 DAE files from Blender. Blender already has a builtin Collada exporter
+but it's not an easily modifiable Python script addon.
 
 Download link: 
 
