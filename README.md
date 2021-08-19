@@ -20,11 +20,12 @@ Customise by modifying the script and contribute changes to this repo.
 Currently exports:
 - Meshes and curves, including meshes generated from a curve.
 - Animation actions from the Non Linear Editor (NLA) or the animation timeline.
-- Rigid body collision shapes and physics information from within Blender mode or Blender Game Engine mode.
 - Armatures and skin deformations.
+- Morph animations with shape key values.
 - Rigid animation by parenting meshes to armature bones. Armatures can also be parented to a bone of another armature allowing for chains of armatures.
 - Different coordinate systems for OpenGL and DirectX. Changes geometry data so doesn't use tricks like adding rotation nodes.
 - Cameras.
 - Lights.
+- Rigid body collision shapes and physics information from within Blender.
 
 Send bugs/queries requests to gregery20@yahoo.com.au or raise an issue on github.
