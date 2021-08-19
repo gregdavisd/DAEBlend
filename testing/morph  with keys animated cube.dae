@@ -1,0 +1,412 @@
+<?xml version="1.0" encoding="utf-8"?>
+<COLLADA xmlns="http://www.collada.org/2008/03/COLLADASchema" version="1.5.0">
+<asset>
+ <contributor>
+  <author> Anonymous </author>
+  <authoring_tool> Collada Exporter for Blender 2.9+, by Gregery Barton </authoring_tool>
+ </contributor>
+ <created>2021-08-19T23:14:44Z  </created>
+ <modified>2021-08-19T23:14:44Z</modified>
+ <unit meter="1.0" name="meter"/>
+ <up_axis>Y_UP</up_axis>
+</asset>
+<library_images>
+</library_images>
+<library_effects>
+ <effect id="Material-effect" name="Material">
+  <profile_COMMON>
+   <technique sid="common">
+    <blinn>
+     <diffuse>
+      <color>0.8000 0.0376 0.0239 1.0000 </color>
+     </diffuse>
+    </blinn>
+   </technique>
+  </profile_COMMON>
+ </effect>
+</library_effects>
+<library_materials>
+ <material id="Material-material" name="Material">
+  <instance_effect url="#Material-effect"/>
+ </material>
+</library_materials>
+<library_geometries>
+ <geometry id="Cube-Basis" name="Cube-Basis">
+  <mesh>
+   <source id="Cube-Basis-positions">
+    <float_array id="Cube-Basis-positions-array" count="24">1.0000 -1.0000 -1.0000 1.0000 -1.0000 1.0000 -1.0000 -1.0000 1.0000 -1.0000 -1.0000 -1.0000 1.0000 1.0000 -1.0000 1.0000 1.0000 1.0000 -1.0000 1.0000 1.0000 -1.0000 1.0000 -1.0000</float_array>
+    <technique_common>
+     <accessor source="#Cube-Basis-positions-array" count="8" stride="3">
+      <param name="X" type="float"/>
+      <param name="Y" type="float"/>
+      <param name="Z" type="float"/>
+     </accessor>
+    </technique_common>
+   </source>
+   <source id="Cube-Basis-normals">
+    <float_array id="Cube-Basis-normals-array" count="24">0.5773 -0.5773 -0.5773 0.5773 -0.5773 0.5773 -0.5773 -0.5773 0.5773 -0.5773 -0.5773 -0.5773 0.5773 0.5773 -0.5773 0.5773 0.5773 0.5773 -0.5773 0.5773 0.5773 -0.5773 0.5773 -0.5773</float_array>
+    <technique_common>
+     <accessor source="#Cube-Basis-normals-array" count="8" stride="3">
+      <param name="X" type="float"/>
+      <param name="Y" type="float"/>
+      <param name="Z" type="float"/>
+     </accessor>
+    </technique_common>
+   </source>
+   <vertices id="Cube-Basis-vertices">
+    <input semantic="POSITION" source="#Cube-Basis-positions"/>
+    <input semantic="NORMAL" source="#Cube-Basis-normals"/>
+   </vertices>
+   <polylist count="6" material="symbol-0">
+    <input semantic="VERTEX" source="#Cube-Basis-vertices" offset="0"/>
+    <input semantic="NORMAL" source="#Cube-Basis-normals" offset="0"/>
+    <vcount>4 4 4 4 4 4</vcount>
+    <p>0 1 2 3 4 7 6 5 0 4 5 1 1 5 6 2 2 6 7 3 4 0 3 7</p>
+   </polylist>
+  </mesh>
+ </geometry>
+ <geometry id="Cube-Key_1" name="Cube-Key_1">
+  <mesh>
+   <source id="Cube-Key_1-positions">
+    <float_array id="Cube-Key_1-positions-array" count="24">1.0000 -1.0000 -1.0000 1.0000 -1.0000 1.0000 -1.0000 -1.0000 1.0000 -1.0000 -1.0000 -1.0000 0.5761 0.4542 -0.4246 1.0000 1.0000 1.0000 -1.0000 1.0000 1.0000 -1.0000 1.0000 -1.0000</float_array>
+    <technique_common>
+     <accessor source="#Cube-Key_1-positions-array" count="8" stride="3">
+      <param name="X" type="float"/>
+      <param name="Y" type="float"/>
+      <param name="Z" type="float"/>
+     </accessor>
+    </technique_common>
+   </source>
+   <source id="Cube-Key_1-normals">
+    <float_array id="Cube-Key_1-normals-array" count="24">0.6106 -0.4970 -0.6165 0.6289 -0.5498 0.5498 -0.5773 -0.5773 0.5773 -0.5424 -0.5424 -0.6415 0.6108 0.5648 -0.5549 0.6097 0.6150 0.5000 -0.5437 0.6392 0.5437 -0.4850 0.6180 -0.6187</float_array>
+    <technique_common>
+     <accessor source="#Cube-Key_1-normals-array" count="8" stride="3">
+      <param name="X" type="float"/>
+      <param name="Y" type="float"/>
+      <param name="Z" type="float"/>
+     </accessor>
+    </technique_common>
+   </source>
+   <vertices id="Cube-Key_1-vertices">
+    <input semantic="POSITION" source="#Cube-Key_1-positions"/>
+    <input semantic="NORMAL" source="#Cube-Key_1-normals"/>
+   </vertices>
+   <polylist count="6" material="symbol-0">
+    <input semantic="VERTEX" source="#Cube-Key_1-vertices" offset="0"/>
+    <input semantic="NORMAL" source="#Cube-Key_1-normals" offset="0"/>
+    <vcount>4 4 4 4 4 4</vcount>
+    <p>0 1 2 3 4 7 6 5 0 4 5 1 1 5 6 2 2 6 7 3 4 0 3 7</p>
+   </polylist>
+  </mesh>
+ </geometry>
+ <geometry id="Cube-Key_2" name="Cube-Key_2">
+  <mesh>
+   <source id="Cube-Key_2-positions">
+    <float_array id="Cube-Key_2-positions-array" count="24">1.0000 -1.0000 -1.0000 1.0000 -1.0000 1.0000 -1.0000 -1.0000 1.0000 -1.0000 -1.0000 -1.0000 1.0000 1.0000 -1.0000 1.0000 1.0000 1.0000 -0.3549 0.7515 0.7035 -1.0000 1.0000 -1.0000</float_array>
+    <technique_common>
+     <accessor source="#Cube-Key_2-positions-array" count="8" stride="3">
+      <param name="X" type="float"/>
+      <param name="Y" type="float"/>
+      <param name="Z" type="float"/>
+     </accessor>
+    </technique_common>
+   </source>
+   <source id="Cube-Key_2-normals">
+    <float_array id="Cube-Key_2-normals-array" count="24">0.5773 -0.5773 -0.5773 0.5592 -0.5592 0.6120 -0.6160 -0.4988 0.6096 -0.6406 -0.5430 -0.5430 0.5618 0.6072 -0.5618 0.5345 0.5958 0.5994 -0.4899 0.6267 0.6060 -0.6156 0.6065 -0.5031</float_array>
+    <technique_common>
+     <accessor source="#Cube-Key_2-normals-array" count="8" stride="3">
+      <param name="X" type="float"/>
+      <param name="Y" type="float"/>
+      <param name="Z" type="float"/>
+     </accessor>
+    </technique_common>
+   </source>
+   <vertices id="Cube-Key_2-vertices">
+    <input semantic="POSITION" source="#Cube-Key_2-positions"/>
+    <input semantic="NORMAL" source="#Cube-Key_2-normals"/>
+   </vertices>
+   <polylist count="6" material="symbol-0">
+    <input semantic="VERTEX" source="#Cube-Key_2-vertices" offset="0"/>
+    <input semantic="NORMAL" source="#Cube-Key_2-normals" offset="0"/>
+    <vcount>4 4 4 4 4 4</vcount>
+    <p>0 1 2 3 4 7 6 5 0 4 5 1 1 5 6 2 2 6 7 3 4 0 3 7</p>
+   </polylist>
+  </mesh>
+ </geometry>
+ <geometry id="Cube-Key_3" name="Cube-Key_3">
+  <mesh>
+   <source id="Cube-Key_3-positions">
+    <float_array id="Cube-Key_3-positions-array" count="24">1.0000 -1.0000 -1.0000 1.0000 -1.0000 1.0000 -1.0000 -1.0000 1.0000 -1.0000 -1.0000 -1.0000 1.0000 1.0000 -1.0000 0.3682 0.6158 0.8468 -1.0000 1.0000 1.0000 -1.0000 1.0000 -1.0000</float_array>
+    <technique_common>
+     <accessor source="#Cube-Key_3-positions-array" count="8" stride="3">
+      <param name="X" type="float"/>
+      <param name="Y" type="float"/>
+      <param name="Z" type="float"/>
+     </accessor>
+    </technique_common>
+   </source>
+   <source id="Cube-Key_3-normals">
+    <float_array id="Cube-Key_3-normals-array" count="24">0.6394 -0.5437 -0.5437 0.6151 -0.5125 0.5992 -0.5675 -0.5675 0.5965 -0.5773 -0.5773 -0.5773 0.6169 0.6142 -0.4921 0.4885 0.5657 0.6643 -0.5346 0.6059 0.5891 -0.5547 0.6200 -0.5547</float_array>
+    <technique_common>
+     <accessor source="#Cube-Key_3-normals-array" count="8" stride="3">
+      <param name="X" type="float"/>
+      <param name="Y" type="float"/>
+      <param name="Z" type="float"/>
+     </accessor>
+    </technique_common>
+   </source>
+   <vertices id="Cube-Key_3-vertices">
+    <input semantic="POSITION" source="#Cube-Key_3-positions"/>
+    <input semantic="NORMAL" source="#Cube-Key_3-normals"/>
+   </vertices>
+   <polylist count="6" material="symbol-0">
+    <input semantic="VERTEX" source="#Cube-Key_3-vertices" offset="0"/>
+    <input semantic="NORMAL" source="#Cube-Key_3-normals" offset="0"/>
+    <vcount>4 4 4 4 4 4</vcount>
+    <p>0 1 2 3 4 7 6 5 0 4 5 1 1 5 6 2 2 6 7 3 4 0 3 7</p>
+   </polylist>
+  </mesh>
+ </geometry>
+ <geometry id="Cube-Key_4" name="Cube-Key_4">
+  <mesh>
+   <source id="Cube-Key_4-positions">
+    <float_array id="Cube-Key_4-positions-array" count="24">1.0000 -1.0000 -1.0000 1.0000 -1.0000 1.0000 -1.0000 -1.0000 1.0000 -1.0000 -1.0000 -1.0000 1.0000 1.0000 -1.0000 1.0000 1.0000 1.0000 -1.0000 1.0000 1.0000 -0.4175 0.6432 -0.7349</float_array>
+    <technique_common>
+     <accessor source="#Cube-Key_4-positions-array" count="8" stride="3">
+      <param name="X" type="float"/>
+      <param name="Y" type="float"/>
+      <param name="Z" type="float"/>
+     </accessor>
+    </technique_common>
+   </source>
+   <source id="Cube-Key_4-normals">
+    <float_array id="Cube-Key_4-normals-array" count="24">0.5608 -0.5608 -0.6090 0.5773 -0.5773 0.5773 -0.6365 -0.5454 0.5454 -0.6141 -0.5071 -0.6047 0.5277 0.6035 -0.5977 0.5559 0.6180 0.5559 -0.6150 0.6105 0.4989 -0.5123 0.5880 -0.6259</float_array>
+    <technique_common>
+     <accessor source="#Cube-Key_4-normals-array" count="8" stride="3">
+      <param name="X" type="float"/>
+      <param name="Y" type="float"/>
+      <param name="Z" type="float"/>
+     </accessor>
+    </technique_common>
+   </source>
+   <vertices id="Cube-Key_4-vertices">
+    <input semantic="POSITION" source="#Cube-Key_4-positions"/>
+    <input semantic="NORMAL" source="#Cube-Key_4-normals"/>
+   </vertices>
+   <polylist count="6" material="symbol-0">
+    <input semantic="VERTEX" source="#Cube-Key_4-vertices" offset="0"/>
+    <input semantic="NORMAL" source="#Cube-Key_4-normals" offset="0"/>
+    <vcount>4 4 4 4 4 4</vcount>
+    <p>0 1 2 3 4 7 6 5 0 4 5 1 1 5 6 2 2 6 7 3 4 0 3 7</p>
+   </polylist>
+  </mesh>
+ </geometry>
+</library_geometries>
+<library_controllers>
+ <controller id="Cube-morph" name="Cube-morph">
+  <morph source="#Cube-Basis" method="RELATIVE">
+   <source id="Cube-morph-targets">
+    <IDREF_array id="Cube-morph-targets-array" count="4">
+     Cube-Key_1 Cube-Key_2 Cube-Key_3 Cube-Key_4
+    </IDREF_array>
+    <technique_common>
+     <accessor source="#Cube-morph-targets-array" count="4" stride="1">
+      <param name="MORPH_TARGET" type="IDREF"/>
+     </accessor>
+    </technique_common>
+   </source>
+   <source id="Cube-morph-weights">
+    <float_array id="Cube-morph-weights-array" count="4" >
+     0.0000 0.0000 0.0000 0.0000
+    </float_array>
+    <technique_common>
+     <accessor source="#Cube-morph-weights-array" count="4" stride="1">
+      <param name="MORPH_WEIGHT" type="float"/>
+     </accessor>
+    </technique_common>
+   </source>
+   <targets>
+    <input source="#Cube-morph-targets" semantic="MORPH_TARGET" />
+    <input source="#Cube-morph-weights" semantic="MORPH_WEIGHT"/>
+   </targets>
+   <extra>
+    <technique profile="KHR">
+     <morph_weights sid="MORPH_WEIGHT_TO_TARGET" count="4">
+      0.0000 0.0000 0.0000 0.0000
+     </morph_weights>
+    </technique>
+   </extra>
+  </morph>
+ </controller>
+</library_controllers>
+<library_cameras>
+</library_cameras>
+<library_lights>
+</library_lights>
+<library_nodes>
+</library_nodes>
+<library_visual_scenes>
+ <visual_scene id="Scene" name="Scene">
+  <node id="Cube" name="Cube" type="NODE">
+   <matrix sid="transform">1.0000 0.0000 -0.0000 0.0000 0.0000 1.0000 -0.0000 0.0000 -0.0000 -0.0000 1.0000 -0.0000 0.0000 0.0000 -0.0000 1.0000</matrix>
+   <instance_controller url="#Cube-morph" sid="morph">
+    <bind_material>
+     <technique_common>
+      <instance_material symbol="symbol-0" target="#Material-material">
+       <bind_vertex_input semantic="UVMap" input_semantic="TEXCOORD" input_set="0"/>
+      </instance_material>
+     </technique_common>
+    </bind_material>
+   </instance_controller>
+  </node>
+ </visual_scene>
+</library_visual_scenes>
+<library_physics_materials>
+</library_physics_materials>
+<library_physics_models>
+</library_physics_models>
+<library_physics_scenes>
+</library_physics_scenes>
+<library_animations>
+ <animation id="Scene-timeline-Cube-morph-Key_1">
+  <source id="Scene-timeline-Cube-morph-Key_1-input">
+   <float_array id="Scene-timeline-Cube-morph-Key_1-input-array" count="249">0.0417 0.0833 0.1250 0.1667 0.2083 0.2500 0.2917 0.3333 0.3750 0.4167 0.4583 0.5000 0.5417 0.5833 0.6250 0.6667 0.7083 0.7500 0.7917 0.8333 0.8750 0.9167 0.9583 1.0000 1.0417 1.0833 1.1250 1.1667 1.2083 1.2500 1.2917 1.3333 1.3750 1.4167 1.4583 1.5000 1.5417 1.5833 1.6250 1.6667 1.7083 1.7500 1.7917 1.8333 1.8750 1.9167 1.9583 2.0000 2.0417 2.0833 2.1250 2.1667 2.2083 2.2500 2.2917 2.3333 2.3750 2.4167 2.4583 2.5000 2.5417 2.5833 2.6250 2.6667 2.7083 2.7500 2.7917 2.8333 2.8750 2.9167 2.9583 3.0000 3.0417 3.0833 3.1250 3.1667 3.2083 3.2500 3.2917 3.3333 3.3750 3.4167 3.4583 3.5000 3.5417 3.5833 3.6250 3.6667 3.7083 3.7500 3.7917 3.8333 3.8750 3.9167 3.9583 4.0000 4.0417 4.0833 4.1250 4.1667 4.2083 4.2500 4.2917 4.3333 4.3750 4.4167 4.4583 4.5000 4.5417 4.5833 4.6250 4.6667 4.7083 4.7500 4.7917 4.8333 4.8750 4.9167 4.9583 5.0000 5.0417 5.0833 5.1250 5.1667 5.2083 5.2500 5.2917 5.3333 5.3750 5.4167 5.4583 5.5000 5.5417 5.5833 5.6250 5.6667 5.7083 5.7500 5.7917 5.8333 5.8750 5.9167 5.9583 6.0000 6.0417 6.0833 6.1250 6.1667 6.2083 6.2500 6.2917 6.3333 6.3750 6.4167 6.4583 6.5000 6.5417 6.5833 6.6250 6.6667 6.7083 6.7500 6.7917 6.8333 6.8750 6.9167 6.9583 7.0000 7.0417 7.0833 7.1250 7.1667 7.2083 7.2500 7.2917 7.3333 7.3750 7.4167 7.4583 7.5000 7.5417 7.5833 7.6250 7.6667 7.7083 7.7500 7.7917 7.8333 7.8750 7.9167 7.9583 8.0000 8.0417 8.0833 8.1250 8.1667 8.2083 8.2500 8.2917 8.3333 8.3750 8.4167 8.4583 8.5000 8.5417 8.5833 8.6250 8.6667 8.7083 8.7500 8.7917 8.8333 8.8750 8.9167 8.9583 9.0000 9.0417 9.0833 9.1250 9.1667 9.2083 9.2500 9.2917 9.3333 9.3750 9.4167 9.4583 9.5000 9.5417 9.5833 9.6250 9.6667 9.7083 9.7500 9.7917 9.8333 9.8750 9.9167 9.9583 10.0000 10.0417 10.0833 10.1250 10.1667 10.2083 10.2500 10.2917 10.3333 10.3750</float_array>
+   <technique_common>
+    <accessor source="#Scene-timeline-Cube-morph-Key_1-input-array" count="249" stride="1">
+     <param name="TIME" type="float"/>
+    </accessor>
+   </technique_common>
+  </source>
+  <source id="Scene-timeline-Cube-morph-Key_1-weights-output">
+   <float_array id="Scene-timeline-Cube-morph-Key_1-weights-output-array" count="249">0.0000 0.0017 0.0068 0.0154 0.0274 0.0429 0.0618 0.0840 0.1096 0.1383 0.1700 0.2045 0.2416 0.2809 0.3222 0.3652 0.4094 0.4545 0.5000 0.5455 0.5906 0.6348 0.6778 0.7191 0.7584 0.7955 0.8300 0.8617 0.8904 0.9160 0.9382 0.9571 0.9726 0.9846 0.9932 0.9983 1.0000 0.9999 0.9997 0.9994 0.9989 0.9983 0.9976 0.9967 0.9957 0.9946 0.9934 0.9920 0.9905 0.9889 0.9871 0.9852 0.9832 0.9811 0.9789 0.9765 0.9740 0.9714 0.9687 0.9659 0.9629 0.9599 0.9567 0.9534 0.9500 0.9465 0.9429 0.9392 0.9353 0.9314 0.9274 0.9233 0.9190 0.9147 0.9103 0.9057 0.9011 0.8964 0.8916 0.8867 0.8817 0.8767 0.8715 0.8663 0.8609 0.8555 0.8501 0.8445 0.8389 0.8331 0.8273 0.8215 0.8156 0.8095 0.8035 0.7973 0.7911 0.7849 0.7786 0.7722 0.7657 0.7592 0.7527 0.7461 0.7394 0.7327 0.7260 0.7192 0.7123 0.7054 0.6985 0.6916 0.6846 0.6775 0.6704 0.6633 0.6562 0.6490 0.6419 0.6346 0.6274 0.6201 0.6129 0.6056 0.5982 0.5909 0.5836 0.5762 0.5688 0.5615 0.5541 0.5467 0.5393 0.5319 0.5245 0.5171 0.5097 0.5023 0.4949 0.4876 0.4802 0.4729 0.4655 0.4582 0.4509 0.4436 0.4363 0.4291 0.4218 0.4146 0.4074 0.4003 0.3932 0.3861 0.3790 0.3719 0.3649 0.3580 0.3510 0.3441 0.3373 0.3304 0.3237 0.3169 0.3102 0.3036 0.2970 0.2904 0.2839 0.2775 0.2711 0.2647 0.2584 0.2522 0.2460 0.2399 0.2338 0.2278 0.2218 0.2159 0.2101 0.2043 0.1986 0.1930 0.1874 0.1819 0.1765 0.1711 0.1658 0.1606 0.1554 0.1503 0.1453 0.1404 0.1355 0.1307 0.1260 0.1214 0.1168 0.1124 0.1080 0.1036 0.0994 0.0952 0.0912 0.0872 0.0833 0.0794 0.0757 0.0720 0.0685 0.0650 0.0616 0.0582 0.0550 0.0519 0.0488 0.0459 0.0430 0.0402 0.0375 0.0349 0.0324 0.0300 0.0277 0.0254 0.0233 0.0212 0.0193 0.0174 0.0156 0.0139 0.0124 0.0109 0.0095 0.0082 0.0070 0.0059 0.0048 0.0039 0.0031 0.0024 0.0017 0.0012 0.0008 0.0004 0.0002 0.0000 0.0000</float_array>
+   <technique_common>
+    <accessor source="#Scene-timeline-Cube-morph-Key_1-weights-output-array" count="249" stride="1">
+     <param name="X" type="float"/>
+    </accessor>
+   </technique_common>
+  </source>
+  <source id="Scene-timeline-Cube-morph-Key_1-interpolation-output">
+   <Name_array id="Scene-timeline-Cube-morph-Key_1-interpolation-output-array" count="249"> LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR </Name_array>
+   <technique_common>
+    <accessor source="#Scene-timeline-Cube-morph-Key_1-interpolation-output-array" count="249" stride="1">
+     <param name="INTERPOLATION" type="Name"/>
+    </accessor>
+   </technique_common>
+  </source>
+  <sampler id="Scene-timeline-Cube-morph-Key_1-weights-sampler">
+   <input semantic="INPUT" source="#Scene-timeline-Cube-morph-Key_1-input"/>
+   <input semantic="OUTPUT" source="#Scene-timeline-Cube-morph-Key_1-weights-output"/>
+   <input semantic="INTERPOLATION" source="#Scene-timeline-Cube-morph-Key_1-interpolation-output"/>
+  </sampler>
+  <channel source="#Scene-timeline-Cube-morph-Key_1-weights-sampler" target="Cube-morph/MORPH_WEIGHT_TO_TARGET(0)"/>
+ </animation>
+ <animation id="Scene-timeline-Cube-morph-Key_2">
+  <source id="Scene-timeline-Cube-morph-Key_2-input">
+   <float_array id="Scene-timeline-Cube-morph-Key_2-input-array" count="213">1.5417 1.5833 1.6250 1.6667 1.7083 1.7500 1.7917 1.8333 1.8750 1.9167 1.9583 2.0000 2.0417 2.0833 2.1250 2.1667 2.2083 2.2500 2.2917 2.3333 2.3750 2.4167 2.4583 2.5000 2.5417 2.5833 2.6250 2.6667 2.7083 2.7500 2.7917 2.8333 2.8750 2.9167 2.9583 3.0000 3.0417 3.0833 3.1250 3.1667 3.2083 3.2500 3.2917 3.3333 3.3750 3.4167 3.4583 3.5000 3.5417 3.5833 3.6250 3.6667 3.7083 3.7500 3.7917 3.8333 3.8750 3.9167 3.9583 4.0000 4.0417 4.0833 4.1250 4.1667 4.2083 4.2500 4.2917 4.3333 4.3750 4.4167 4.4583 4.5000 4.5417 4.5833 4.6250 4.6667 4.7083 4.7500 4.7917 4.8333 4.8750 4.9167 4.9583 5.0000 5.0417 5.0833 5.1250 5.1667 5.2083 5.2500 5.2917 5.3333 5.3750 5.4167 5.4583 5.5000 5.5417 5.5833 5.6250 5.6667 5.7083 5.7500 5.7917 5.8333 5.8750 5.9167 5.9583 6.0000 6.0417 6.0833 6.1250 6.1667 6.2083 6.2500 6.2917 6.3333 6.3750 6.4167 6.4583 6.5000 6.5417 6.5833 6.6250 6.6667 6.7083 6.7500 6.7917 6.8333 6.8750 6.9167 6.9583 7.0000 7.0417 7.0833 7.1250 7.1667 7.2083 7.2500 7.2917 7.3333 7.3750 7.4167 7.4583 7.5000 7.5417 7.5833 7.6250 7.6667 7.7083 7.7500 7.7917 7.8333 7.8750 7.9167 7.9583 8.0000 8.0417 8.0833 8.1250 8.1667 8.2083 8.2500 8.2917 8.3333 8.3750 8.4167 8.4583 8.5000 8.5417 8.5833 8.6250 8.6667 8.7083 8.7500 8.7917 8.8333 8.8750 8.9167 8.9583 9.0000 9.0417 9.0833 9.1250 9.1667 9.2083 9.2500 9.2917 9.3333 9.3750 9.4167 9.4583 9.5000 9.5417 9.5833 9.6250 9.6667 9.7083 9.7500 9.7917 9.8333 9.8750 9.9167 9.9583 10.0000 10.0417 10.0833 10.1250 10.1667 10.2083 10.2500 10.2917 10.3333 10.3750</float_array>
+   <technique_common>
+    <accessor source="#Scene-timeline-Cube-morph-Key_2-input-array" count="213" stride="1">
+     <param name="TIME" type="float"/>
+    </accessor>
+   </technique_common>
+  </source>
+  <source id="Scene-timeline-Cube-morph-Key_2-weights-output">
+   <float_array id="Scene-timeline-Cube-morph-Key_2-weights-output-array" count="213">0.0000 0.0020 0.0081 0.0183 0.0326 0.0510 0.0735 0.0999 0.1302 0.1640 0.2012 0.2416 0.2846 0.3300 0.3772 0.4257 0.4752 0.5248 0.5743 0.6228 0.6700 0.7154 0.7584 0.7988 0.8360 0.8698 0.9001 0.9265 0.9490 0.9674 0.9817 0.9919 0.9980 1.0000 0.9999 0.9997 0.9993 0.9987 0.9980 0.9971 0.9961 0.9949 0.9935 0.9920 0.9903 0.9885 0.9865 0.9844 0.9821 0.9796 0.9770 0.9743 0.9713 0.9683 0.9651 0.9617 0.9582 0.9545 0.9507 0.9468 0.9427 0.9384 0.9340 0.9295 0.9249 0.9201 0.9151 0.9100 0.9048 0.8995 0.8940 0.8884 0.8827 0.8769 0.8709 0.8648 0.8586 0.8523 0.8458 0.8393 0.8326 0.8258 0.8189 0.8119 0.8049 0.7977 0.7904 0.7830 0.7755 0.7680 0.7603 0.7526 0.7447 0.7368 0.7289 0.7208 0.7127 0.7045 0.6963 0.6879 0.6796 0.6711 0.6626 0.6541 0.6455 0.6369 0.6282 0.6195 0.6107 0.6019 0.5931 0.5843 0.5754 0.5665 0.5576 0.5487 0.5398 0.5309 0.5219 0.5130 0.5040 0.4951 0.4862 0.4772 0.4683 0.4594 0.4505 0.4417 0.4329 0.4241 0.4153 0.4066 0.3979 0.3892 0.3806 0.3720 0.3635 0.3550 0.3466 0.3382 0.3299 0.3216 0.3134 0.3053 0.2973 0.2893 0.2814 0.2735 0.2658 0.2581 0.2505 0.2430 0.2356 0.2282 0.2210 0.2138 0.2067 0.1998 0.1929 0.1861 0.1795 0.1729 0.1664 0.1601 0.1538 0.1477 0.1416 0.1357 0.1299 0.1242 0.1186 0.1132 0.1078 0.1026 0.0975 0.0925 0.0877 0.0829 0.0783 0.0738 0.0695 0.0653 0.0612 0.0572 0.0533 0.0496 0.0460 0.0426 0.0393 0.0361 0.0330 0.0301 0.0273 0.0246 0.0221 0.0197 0.0175 0.0154 0.0134 0.0115 0.0098 0.0083 0.0068 0.0055 0.0044 0.0033 0.0025 0.0017 0.0011 0.0006 0.0003 0.0001 0.0000</float_array>
+   <technique_common>
+    <accessor source="#Scene-timeline-Cube-morph-Key_2-weights-output-array" count="213" stride="1">
+     <param name="X" type="float"/>
+    </accessor>
+   </technique_common>
+  </source>
+  <source id="Scene-timeline-Cube-morph-Key_2-interpolation-output">
+   <Name_array id="Scene-timeline-Cube-morph-Key_2-interpolation-output-array" count="213"> LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR </Name_array>
+   <technique_common>
+    <accessor source="#Scene-timeline-Cube-morph-Key_2-interpolation-output-array" count="213" stride="1">
+     <param name="INTERPOLATION" type="Name"/>
+    </accessor>
+   </technique_common>
+  </source>
+  <sampler id="Scene-timeline-Cube-morph-Key_2-weights-sampler">
+   <input semantic="INPUT" source="#Scene-timeline-Cube-morph-Key_2-input"/>
+   <input semantic="OUTPUT" source="#Scene-timeline-Cube-morph-Key_2-weights-output"/>
+   <input semantic="INTERPOLATION" source="#Scene-timeline-Cube-morph-Key_2-interpolation-output"/>
+  </sampler>
+  <channel source="#Scene-timeline-Cube-morph-Key_2-weights-sampler" target="Cube-morph/MORPH_WEIGHT_TO_TARGET(1)"/>
+ </animation>
+ <animation id="Scene-timeline-Cube-morph-Key_3">
+  <source id="Scene-timeline-Cube-morph-Key_3-input">
+   <float_array id="Scene-timeline-Cube-morph-Key_3-input-array" count="180">2.9167 2.9583 3.0000 3.0417 3.0833 3.1250 3.1667 3.2083 3.2500 3.2917 3.3333 3.3750 3.4167 3.4583 3.5000 3.5417 3.5833 3.6250 3.6667 3.7083 3.7500 3.7917 3.8333 3.8750 3.9167 3.9583 4.0000 4.0417 4.0833 4.1250 4.1667 4.2083 4.2500 4.2917 4.3333 4.3750 4.4167 4.4583 4.5000 4.5417 4.5833 4.6250 4.6667 4.7083 4.7500 4.7917 4.8333 4.8750 4.9167 4.9583 5.0000 5.0417 5.0833 5.1250 5.1667 5.2083 5.2500 5.2917 5.3333 5.3750 5.4167 5.4583 5.5000 5.5417 5.5833 5.6250 5.6667 5.7083 5.7500 5.7917 5.8333 5.8750 5.9167 5.9583 6.0000 6.0417 6.0833 6.1250 6.1667 6.2083 6.2500 6.2917 6.3333 6.3750 6.4167 6.4583 6.5000 6.5417 6.5833 6.6250 6.6667 6.7083 6.7500 6.7917 6.8333 6.8750 6.9167 6.9583 7.0000 7.0417 7.0833 7.1250 7.1667 7.2083 7.2500 7.2917 7.3333 7.3750 7.4167 7.4583 7.5000 7.5417 7.5833 7.6250 7.6667 7.7083 7.7500 7.7917 7.8333 7.8750 7.9167 7.9583 8.0000 8.0417 8.0833 8.1250 8.1667 8.2083 8.2500 8.2917 8.3333 8.3750 8.4167 8.4583 8.5000 8.5417 8.5833 8.6250 8.6667 8.7083 8.7500 8.7917 8.8333 8.8750 8.9167 8.9583 9.0000 9.0417 9.0833 9.1250 9.1667 9.2083 9.2500 9.2917 9.3333 9.3750 9.4167 9.4583 9.5000 9.5417 9.5833 9.6250 9.6667 9.7083 9.7500 9.7917 9.8333 9.8750 9.9167 9.9583 10.0000 10.0417 10.0833 10.1250 10.1667 10.2083 10.2500 10.2917 10.3333 10.3750</float_array>
+   <technique_common>
+    <accessor source="#Scene-timeline-Cube-morph-Key_3-input-array" count="180" stride="1">
+     <param name="TIME" type="float"/>
+    </accessor>
+   </technique_common>
+  </source>
+  <source id="Scene-timeline-Cube-morph-Key_3-weights-output">
+   <float_array id="Scene-timeline-Cube-morph-Key_3-weights-output-array" count="180">0.0000 0.0023 0.0092 0.0208 0.0370 0.0578 0.0833 0.1131 0.1472 0.1852 0.2269 0.2718 0.3195 0.3694 0.4210 0.4736 0.5264 0.5790 0.6306 0.6805 0.7282 0.7731 0.8148 0.8528 0.8869 0.9167 0.9422 0.9630 0.9792 0.9908 0.9977 1.0000 0.9999 0.9996 0.9991 0.9984 0.9975 0.9964 0.9951 0.9936 0.9918 0.9899 0.9878 0.9855 0.9829 0.9802 0.9772 0.9741 0.9707 0.9672 0.9634 0.9594 0.9552 0.9509 0.9463 0.9415 0.9365 0.9314 0.9260 0.9204 0.9147 0.9087 0.9026 0.8962 0.8897 0.8830 0.8761 0.8690 0.8617 0.8543 0.8467 0.8389 0.8309 0.8228 0.8145 0.8061 0.7974 0.7887 0.7798 0.7707 0.7615 0.7522 0.7427 0.7332 0.7234 0.7136 0.7037 0.6936 0.6834 0.6732 0.6628 0.6524 0.6418 0.6312 0.6206 0.6098 0.5990 0.5881 0.5772 0.5663 0.5553 0.5443 0.5332 0.5222 0.5111 0.5000 0.4889 0.4778 0.4668 0.4557 0.4447 0.4337 0.4228 0.4119 0.4010 0.3902 0.3794 0.3688 0.3582 0.3476 0.3372 0.3268 0.3166 0.3064 0.2963 0.2864 0.2766 0.2668 0.2573 0.2478 0.2385 0.2293 0.2202 0.2113 0.2026 0.1939 0.1855 0.1772 0.1691 0.1611 0.1533 0.1457 0.1383 0.1310 0.1239 0.1170 0.1103 0.1038 0.0974 0.0913 0.0853 0.0796 0.0740 0.0686 0.0635 0.0585 0.0537 0.0491 0.0448 0.0406 0.0366 0.0328 0.0293 0.0259 0.0228 0.0198 0.0171 0.0145 0.0122 0.0101 0.0082 0.0064 0.0049 0.0036 0.0025 0.0016 0.0009 0.0004 0.0001 0.0000</float_array>
+   <technique_common>
+    <accessor source="#Scene-timeline-Cube-morph-Key_3-weights-output-array" count="180" stride="1">
+     <param name="X" type="float"/>
+    </accessor>
+   </technique_common>
+  </source>
+  <source id="Scene-timeline-Cube-morph-Key_3-interpolation-output">
+   <Name_array id="Scene-timeline-Cube-morph-Key_3-interpolation-output-array" count="180"> LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR </Name_array>
+   <technique_common>
+    <accessor source="#Scene-timeline-Cube-morph-Key_3-interpolation-output-array" count="180" stride="1">
+     <param name="INTERPOLATION" type="Name"/>
+    </accessor>
+   </technique_common>
+  </source>
+  <sampler id="Scene-timeline-Cube-morph-Key_3-weights-sampler">
+   <input semantic="INPUT" source="#Scene-timeline-Cube-morph-Key_3-input"/>
+   <input semantic="OUTPUT" source="#Scene-timeline-Cube-morph-Key_3-weights-output"/>
+   <input semantic="INTERPOLATION" source="#Scene-timeline-Cube-morph-Key_3-interpolation-output"/>
+  </sampler>
+  <channel source="#Scene-timeline-Cube-morph-Key_3-weights-sampler" target="Cube-morph/MORPH_WEIGHT_TO_TARGET(2)"/>
+ </animation>
+ <animation id="Scene-timeline-Cube-morph-Key_4">
+  <source id="Scene-timeline-Cube-morph-Key_4-input">
+   <float_array id="Scene-timeline-Cube-morph-Key_4-input-array" count="149">4.2083 4.2500 4.2917 4.3333 4.3750 4.4167 4.4583 4.5000 4.5417 4.5833 4.6250 4.6667 4.7083 4.7500 4.7917 4.8333 4.8750 4.9167 4.9583 5.0000 5.0417 5.0833 5.1250 5.1667 5.2083 5.2500 5.2917 5.3333 5.3750 5.4167 5.4583 5.5000 5.5417 5.5833 5.6250 5.6667 5.7083 5.7500 5.7917 5.8333 5.8750 5.9167 5.9583 6.0000 6.0417 6.0833 6.1250 6.1667 6.2083 6.2500 6.2917 6.3333 6.3750 6.4167 6.4583 6.5000 6.5417 6.5833 6.6250 6.6667 6.7083 6.7500 6.7917 6.8333 6.8750 6.9167 6.9583 7.0000 7.0417 7.0833 7.1250 7.1667 7.2083 7.2500 7.2917 7.3333 7.3750 7.4167 7.4583 7.5000 7.5417 7.5833 7.6250 7.6667 7.7083 7.7500 7.7917 7.8333 7.8750 7.9167 7.9583 8.0000 8.0417 8.0833 8.1250 8.1667 8.2083 8.2500 8.2917 8.3333 8.3750 8.4167 8.4583 8.5000 8.5417 8.5833 8.6250 8.6667 8.7083 8.7500 8.7917 8.8333 8.8750 8.9167 8.9583 9.0000 9.0417 9.0833 9.1250 9.1667 9.2083 9.2500 9.2917 9.3333 9.3750 9.4167 9.4583 9.5000 9.5417 9.5833 9.6250 9.6667 9.7083 9.7500 9.7917 9.8333 9.8750 9.9167 9.9583 10.0000 10.0417 10.0833 10.1250 10.1667 10.2083 10.2500 10.2917 10.3333 10.3750</float_array>
+   <technique_common>
+    <accessor source="#Scene-timeline-Cube-morph-Key_4-input-array" count="149" stride="1">
+     <param name="TIME" type="float"/>
+    </accessor>
+   </technique_common>
+  </source>
+  <source id="Scene-timeline-Cube-morph-Key_4-weights-output">
+   <float_array id="Scene-timeline-Cube-morph-Key_4-weights-output-array" count="149">0.0000 0.0021 0.0086 0.0195 0.0347 0.0543 0.0782 0.1062 0.1383 0.1741 0.2135 0.2561 0.3014 0.3489 0.3983 0.4488 0.5000 0.5512 0.6017 0.6511 0.6986 0.7439 0.7865 0.8259 0.8617 0.8938 0.9218 0.9457 0.9653 0.9805 0.9914 0.9979 1.0000 0.9998 0.9993 0.9985 0.9974 0.9959 0.9941 0.9920 0.9895 0.9867 0.9835 0.9801 0.9763 0.9721 0.9677 0.9629 0.9577 0.9523 0.9465 0.9403 0.9339 0.9271 0.9200 0.9126 0.9049 0.8969 0.8885 0.8799 0.8710 0.8617 0.8522 0.8424 0.8323 0.8219 0.8113 0.8004 0.7893 0.7779 0.7663 0.7545 0.7424 0.7302 0.7177 0.7050 0.6922 0.6792 0.6660 0.6527 0.6393 0.6257 0.6120 0.5983 0.5844 0.5704 0.5564 0.5424 0.5283 0.5141 0.5000 0.4859 0.4717 0.4576 0.4436 0.4296 0.4156 0.4017 0.3880 0.3743 0.3607 0.3473 0.3340 0.3208 0.3078 0.2950 0.2823 0.2698 0.2576 0.2455 0.2337 0.2221 0.2107 0.1996 0.1887 0.1781 0.1677 0.1576 0.1478 0.1383 0.1290 0.1201 0.1115 0.1031 0.0951 0.0874 0.0800 0.0729 0.0661 0.0597 0.0535 0.0477 0.0423 0.0371 0.0323 0.0279 0.0237 0.0199 0.0165 0.0133 0.0105 0.0080 0.0059 0.0041 0.0026 0.0015 0.0007 0.0002 0.0000</float_array>
+   <technique_common>
+    <accessor source="#Scene-timeline-Cube-morph-Key_4-weights-output-array" count="149" stride="1">
+     <param name="X" type="float"/>
+    </accessor>
+   </technique_common>
+  </source>
+  <source id="Scene-timeline-Cube-morph-Key_4-interpolation-output">
+   <Name_array id="Scene-timeline-Cube-morph-Key_4-interpolation-output-array" count="149"> LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR  LINEAR </Name_array>
+   <technique_common>
+    <accessor source="#Scene-timeline-Cube-morph-Key_4-interpolation-output-array" count="149" stride="1">
+     <param name="INTERPOLATION" type="Name"/>
+    </accessor>
+   </technique_common>
+  </source>
+  <sampler id="Scene-timeline-Cube-morph-Key_4-weights-sampler">
+   <input semantic="INPUT" source="#Scene-timeline-Cube-morph-Key_4-input"/>
+   <input semantic="OUTPUT" source="#Scene-timeline-Cube-morph-Key_4-weights-output"/>
+   <input semantic="INTERPOLATION" source="#Scene-timeline-Cube-morph-Key_4-interpolation-output"/>
+  </sampler>
+  <channel source="#Scene-timeline-Cube-morph-Key_4-weights-sampler" target="Cube-morph/MORPH_WEIGHT_TO_TARGET(3)"/>
+ </animation>
+</library_animations>
+<library_animation_clips>
+ <animation_clip id="Scene-timeline" start="0.0000" end="10.3750">
+  <instance_animation url="#Scene-timeline-Cube-morph-Key_1"/>
+  <instance_animation url="#Scene-timeline-Cube-morph-Key_2"/>
+  <instance_animation url="#Scene-timeline-Cube-morph-Key_3"/>
+  <instance_animation url="#Scene-timeline-Cube-morph-Key_4"/>
+ </animation_clip>
+</library_animation_clips>
+<scene>
+	<instance_visual_scene url="#Scene"/>
+	<instance_physics_scene url="#Scene-physics"/>
+</scene>
+</COLLADA>

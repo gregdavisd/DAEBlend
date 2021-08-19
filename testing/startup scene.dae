@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<COLLADA xmlns="http://www.collada.org/2008/03/COLLADASchema" version="1.5.0">
+<asset>
+ <contributor>
+  <author> Anonymous </author>
+  <authoring_tool> Collada Exporter for Blender 2.9+, by Gregery Barton </authoring_tool>
+ </contributor>
+ <created>2021-08-19T23:39:10Z  </created>
+ <modified>2021-08-19T23:39:10Z</modified>
+ <unit meter="1.0" name="meter"/>
+ <up_axis>Y_UP</up_axis>
+</asset>
+<library_images>
+</library_images>
+<library_effects>
+ <effect id="Material-effect" name="Material">
+  <profile_COMMON>
+   <technique sid="common">
+    <blinn>
+     <diffuse>
+      <color>0.8000 0.8000 0.8000 1.0000 </color>
+     </diffuse>
+    </blinn>
+   </technique>
+  </profile_COMMON>
+ </effect>
+</library_effects>
+<library_materials>
+ <material id="Material-material" name="Material">
+  <instance_effect url="#Material-effect"/>
+ </material>
+</library_materials>
+<library_geometries>
+ <geometry id="Cube" name="Cube">
+  <mesh>
+   <source id="Cube-positions">
+    <float_array id="Cube-positions-array" count="24">1.0000 -1.0000 -1.0000 1.0000 -1.0000 1.0000 -1.0000 -1.0000 1.0000 -1.0000 -1.0000 -1.0000 1.0000 1.0000 -1.0000 1.0000 1.0000 1.0000 -1.0000 1.0000 1.0000 -1.0000 1.0000 -1.0000</float_array>
+    <technique_common>
+     <accessor source="#Cube-positions-array" count="8" stride="3">
+      <param name="X" type="float"/>
+      <param name="Y" type="float"/>
+      <param name="Z" type="float"/>
+     </accessor>
+    </technique_common>
+   </source>
+   <source id="Cube-normals">
+    <float_array id="Cube-normals-array" count="24">0.5773 -0.5773 -0.5773 0.5773 -0.5773 0.5773 -0.5773 -0.5773 0.5773 -0.5773 -0.5773 -0.5773 0.5773 0.5773 -0.5773 0.5773 0.5773 0.5773 -0.5773 0.5773 0.5773 -0.5773 0.5773 -0.5773</float_array>
+    <technique_common>
+     <accessor source="#Cube-normals-array" count="8" stride="3">
+      <param name="X" type="float"/>
+      <param name="Y" type="float"/>
+      <param name="Z" type="float"/>
+     </accessor>
+    </technique_common>
+   </source>
+   <vertices id="Cube-vertices">
+    <input semantic="POSITION" source="#Cube-positions"/>
+    <input semantic="NORMAL" source="#Cube-normals"/>
+   </vertices>
+   <polylist count="6" material="symbol-0">
+    <input semantic="VERTEX" source="#Cube-vertices" offset="0"/>
+    <input semantic="NORMAL" source="#Cube-normals" offset="0"/>
+    <vcount>4 4 4 4 4 4</vcount>
+    <p>0 1 2 3 4 7 6 5 0 4 5 1 1 5 6 2 2 6 7 3 4 0 3 7</p>
+   </polylist>
+  </mesh>
+ </geometry>
+</library_geometries>
+<library_controllers>
+</library_controllers>
+<library_cameras>
+ <camera id="Camera-camera" name="Camera">
+  <optics>
+   <technique_common>
+    <perspective>
+     <yfov> 49.1343 </yfov>
+     <aspect_ratio> 1.7778 </aspect_ratio>
+     <znear> 0.1000 </znear>
+     <zfar> 100.0000 </zfar>
+    </perspective>
+   </technique_common>
+  </optics>
+ </camera>
+</library_cameras>
+<library_lights>
+ <light id="Lamp-light" name="Lamp">
+   <technique_common>
+    <point>
+     <color>1.0000 1.0000 1.0000</color>
+     <linear_attenuation>0.0000</linear_attenuation>
+     <quadratic_attenuation>1.0000</quadratic_attenuation>
+     <zfar>30.0020</zfar>
+    </point>
+   </technique_common>
+ </light>
+</library_lights>
+<library_nodes>
+</library_nodes>
+<library_visual_scenes>
+ <visual_scene id="Scene" name="Scene">
+  <node id="Cube-1" name="Cube" type="NODE">
+   <matrix sid="transform">1.0000 0.0000 -0.0000 0.0000 0.0000 1.0000 -0.0000 0.0000 -0.0000 -0.0000 1.0000 -0.0000 0.0000 0.0000 -0.0000 1.0000</matrix>
+   <instance_geometry url="#Cube">
+    <bind_material>
+     <technique_common>
+      <instance_material symbol="symbol-0" target="#Material-material">
+       <bind_vertex_input semantic="UVMap" input_semantic="TEXCOORD" input_set="0"/>
+      </instance_material>
+     </technique_common>
+    </bind_material>
+   </instance_geometry>
+  </node>
+  <node id="Camera" name="Camera" type="NODE">
+   <matrix sid="transform">0.6859 -0.3240 0.6516 7.4811 0.0000 0.8954 0.4453 5.3437 -0.7277 -0.3054 0.6142 6.5076 0.0000 0.0000 -0.0000 1.0000</matrix>
+   <instance_camera url="#Camera-camera"/>
+  </node>
+  <node id="Lamp" name="Lamp" type="NODE">
+   <matrix sid="transform">-0.2909 0.5664 0.7711 4.0762 -0.0552 0.7947 -0.6045 5.9039 -0.9552 -0.2184 -0.1999 -1.0055 0.0000 0.0000 -0.0000 1.0000</matrix>
+   <instance_light url="#Lamp-light"/>
+  </node>
+ </visual_scene>
+</library_visual_scenes>
+<library_physics_materials>
+</library_physics_materials>
+<library_physics_models>
+</library_physics_models>
+<library_physics_scenes>
+</library_physics_scenes>
+<library_animations>
+</library_animations>
+<library_animation_clips>
+ <animation_clip id="Scene-timeline" start="0.0000" end="10.3750">
+ </animation_clip>
+</library_animation_clips>
+<scene>
+	<instance_visual_scene url="#Scene"/>
+	<instance_physics_scene url="#Scene-physics"/>
+</scene>
+</COLLADA>
