@@ -33,11 +33,7 @@ from urllib.parse import urlparse
 # Author: Gregery Barton
 # Contact: gregery20@yahoo.com.au
 #
-# Originally authored by:
-# Script copyright (C) Juan Linietsky
-# Contact Info: juan@codenix.com
-#
-#
+
 
 """
 This script is an exporter to the Khronos Collada file format.
@@ -164,35 +160,18 @@ class DaeExporter:
 
     def export_image(self, image, image_id):
 
-        backup_image_path = image.filepath
-        imgpath = image.filepath
-        if not len(imgpath):
-            imgpath = "//" + image_id + ".png"
+        imgpath = "//" + image_id + ".png"
+        save_path = os.path.abspath(os.path.join(
+            os.path.dirname(self.path),
+            IMAGE_PATH,
+            os.path.basename(imgpath)))
 
-        save_path = os.path.abspath(os.path.join(os.path.dirname(
-            self.path), IMAGE_PATH, urlparse(imgpath).netloc))
-
-        # all images must be saved to a sub folder of the target folder.
-        if os.path.commonpath([self.path, save_path]) != os.path.dirname(self.path):
-            save_path = os.path.abspath(os.path.join(os.path.dirname(
-                self.path), IMAGE_PATH, os.path.basename(save_path)))
-
-        xml_path = os.path.join(
-            "./", os.path.relpath(save_path, os.path.dirname(self.path))).replace("\\", "/")
-
-        if (self.config["use_copy_images"] and save_path not in self.image_cache):
+        if (save_path not in self.image_cache):
             basedir = os.path.dirname(save_path)
             if (not os.path.isdir(basedir)):
                 os.makedirs(basedir)
 
-            if imgpath.lower().endswith(tuple(bpy.path.extensions_image)):
-                image.filepath = save_path
-            else:
-                image.filepath = os.path.join(
-                    basedir, "{}.png".format(image.name))
-
-            image.save()
-            image.filepath = backup_image_path
+            image.save_render(save_path)
             self.image_cache |= {save_path}
 
         self.writel(S_IMGS, 1, '<image id="' + image_id +
@@ -200,29 +179,40 @@ class DaeExporter:
 
         # the file path should be surrounded by <ref> tags
 
+        xml_path = os.path.join(
+            "./", os.path.relpath(save_path, os.path.dirname(self.path))).replace("\\", "/")
         self.writel(S_IMGS, 2, '<init_from><ref>' +
                     xml_path + '</ref></init_from>')
-
         self.writel(S_IMGS, 1, '</image>')
 
-    def export_sampler2d(self, imgid):
-        sampler_sid = imgid + "-sampler"
-        self.writel(S_FX, 3, '<newparam sid="' + sampler_sid + '">')
-        self.writel(S_FX, 4, '<sampler2D>')
-        self.writel(
-            S_FX, 5, '<instance_image url="{}"/>'.format(self.ref_id(imgid)))
+    def export_sampler2d(self, il, imgid, sampler_sids):
+        if (imgid):
+            sampler_sid = imgid + "-sampler"
+            if sampler_sid in sampler_sids:
+                return sampler_sid
+            sampler_sids.add(sampler_sid)
+            self.writel(S_FX, il, '<newparam sid="' + sampler_sid + '">')
+            self.writel(S_FX, il+1, '<sampler2D>')
+            self.writel(
+                S_FX, il+2, '<instance_image url="{}"/>'.format(self.ref_id(imgid)))
 
-        self.writel(S_FX, 4, '</sampler2D>')
-        self.writel(S_FX, 3, '</newparam>')
+            self.writel(S_FX, il+1, '</sampler2D>')
+            self.writel(S_FX, il, '</newparam>')
 
-        return sampler_sid
+            return sampler_sid
+        else:
+            return None
 
-    def export_effect(self, material, effect_id):
+    def export_effect(self, material, effect_id, lookup):
+        if material.use_nodes:
+            self.export_nodes_effect(material, effect_id, lookup)
+        else:
+            self.export_generic_effect(material, effect_id, lookup)
 
+    def export_generic_effect(self, material, effect_id):
         self.writel(S_FX, 1, '<effect id="' + effect_id +
                     '" name="' + material.name + '">')
         self.writel(S_FX, 2, '<profile_COMMON>')
-
         self.writel(S_FX, 3, '<technique sid="common">')
         shtype = "blinn"
         self.writel(S_FX, 4, '<' + shtype + '>')
@@ -240,6 +230,160 @@ class DaeExporter:
         self.writel(S_FX, 2, '</profile_COMMON>')
         self.writel(S_FX, 1, '</effect>')
 
+    def export_nodes_effect(self, material, effect_id, lookup):
+
+        try:
+            output_node = material.node_tree.get_output_node('ALL')
+            surface_input = next(
+                (input for input in output_node.inputs if input.identifier == 'Surface'),
+                None)
+            surface_node = surface_input.links[0].from_node
+        except:
+            self.export_generic_effect(material, effect_id)
+            return
+
+        self.writel(S_FX, 1, '<effect id="' + effect_id +
+                    '" name="' + material.name + '">')
+
+        shader_funcs = {
+            bpy.types.ShaderNodeBsdfPrincipled: self.export_ShaderNodeBsdfPrincipled,
+        }
+
+        if type(surface_node) in shader_funcs.keys():
+            shader_funcs[type(surface_node)](surface_node, lookup)
+        else:
+            self.export_unknown_node_shader(surface_node, lookup)
+
+        self.writel(S_FX, 1, '</effect>')
+
+    def export_unknown_node_shader(self, shader, lookup):
+        try:
+            color = self.tex_or_color(shader.inputs['Color'], lookup)
+            sampler_sids = set()
+            color_sampler = self.export_sampler2d(
+                3, color['image_id'], sampler_sids)
+        except:
+            return
+
+        self.writel(S_FX, 2, '<profile_COMMON>')
+        self.writel(S_FX, 3, '<technique sid="common">')
+        self.writel(S_FX, 4, '<lambert>')
+
+        self.writel(S_FX, 5, '<diffuse>')
+        self.writel(S_FX, 6, self.xml_tex_or_color(color, color_sampler))
+        self.writel(S_FX, 5, '</diffuse>')
+
+        self.writel(S_FX, 4, '</lambert>')
+        self.writel(S_FX, 3, '</technique>')
+        self.writel(S_FX, 2, '</profile_COMMON>')
+
+    def export_ShaderNodeBsdfPrincipled(self, shader, lookup):
+        self.writel(S_FX, 2, '<profile_COMMON>')
+
+        base = self.tex_or_color(shader.inputs['Base Color'], lookup)
+        emission = self.tex_or_color(shader.inputs['Emission'], lookup)
+        alpha = self.tex_or_factor(shader.inputs['Alpha'], lookup)
+        specular = self.tex_or_factor(shader.inputs['Specular'], lookup)
+        normal = self.get_socket_image(shader.inputs['Normal'], lookup)
+
+        sampler_sids = set()
+        base_sampler = self.export_sampler2d(3, base['image_id'], sampler_sids)
+        emission_sampler = self.export_sampler2d(
+            3, emission['image_id'], sampler_sids)
+        alpha_sampler = self.export_sampler2d(
+            3, alpha['image_id'], sampler_sids)
+        specular_sampler = self.export_sampler2d(
+            3, specular['image_id'], sampler_sids)
+        normal_sampler = self.export_sampler2d(3, normal, sampler_sids)
+
+        self.writel(S_FX, 3, '<technique sid="common">')
+        self.writel(S_FX, 4, '<blinn>')
+
+        self.writel(S_FX, 5, '<diffuse>')
+        self.writel(S_FX, 6, self.xml_tex_or_color(base, base_sampler))
+        self.writel(S_FX, 5, '</diffuse>')
+
+        self.writel(S_FX, 5, '<emission>')
+        self.writel(S_FX, 6, self.xml_tex_or_color(emission, emission_sampler))
+        self.writel(S_FX, 5, '</emission>')
+
+        self.writel(S_FX, 5, '<transparent opaque="RGB_ONE">')
+        self.writel(S_FX, 6, self.xml_tex_or_factor(alpha, alpha_sampler))
+        self.writel(S_FX, 5, '</transparent>')
+
+        self.writel(S_FX, 5, '<specular>')
+        self.writel(S_FX, 6, self.xml_tex_or_factor(
+            specular, specular_sampler))
+        self.writel(S_FX, 5, '</specular>')
+
+        self.writel(S_FX, 5, '<shininess>')
+        self.writel(S_FX, 6, '<float>' +
+                    strflt(shader.inputs['Roughness'].default_value) + '</float>')
+        self.writel(S_FX, 5, '</shininess>')
+
+        self.writel(S_FX, 5, '<index_of_refraction>')
+        self.writel(S_FX, 6, '<float>' +
+                    strflt(shader.inputs['IOR'].default_value) + '</float>')
+        self.writel(S_FX, 5, '</index_of_refraction>')
+
+        self.writel(S_FX, 4, '</blinn>')
+
+        if normal_sampler:
+            self.writel(S_FX, 4, '<extra>')
+            self.writel(S_FX, 5, '<technique profile="FCOLLADA">')
+            self.writel(S_FX, 6, '<bump bumptype="NORMALMAP">')
+            self.writel(S_FX, 7, self.xml_tex(normal_sampler))
+            self.writel(S_FX, 6, '</bump>')
+            self.writel(S_FX, 5, '</technique>')
+            self.writel(S_FX, 4, '</extra>')
+
+        self.writel(S_FX, 3, '</technique>')
+        self.writel(S_FX, 2, '</profile_COMMON>')
+
+    # socket:NodeSocketColor()
+    def tex_or_color(self, socket, lookup):
+        result = {
+            'image_id': self.get_socket_image(socket, lookup),
+            'color': strarr(socket.default_value)
+        }
+        return result
+
+    def tex_or_factor(self, socket, lookup):
+        result = {
+            'image_id': self.get_socket_image(socket, lookup),
+            'factor': socket.default_value
+        }
+        return result
+
+    def get_socket_image(self, socket, lookup):
+        if socket.is_linked:
+            linked_node = socket.links[0].from_node
+            if type(linked_node) == bpy.types.ShaderNodeTexImage:
+                image = linked_node.image
+                image_id = lookup['image'].get(image, None)
+                if not image_id:
+                    image_id = self.gen_unique_id(image.name)
+                    self.export_image(image, image_id)
+                    lookup['image'][image] = image_id
+                return image_id
+        return None
+
+    def xml_tex(self, sampler):
+        return '<texture texture="'+sampler+'" texcoord="UVMap"/>'
+
+    def xml_tex_or_color(self, tex_or_color, sampler):
+        if sampler:
+            return self.xml_tex(sampler)
+        else:
+            return '<color>' + tex_or_color['color'] + ' </color>'
+
+    def xml_tex_or_factor(self, tex_or_factor, sampler):
+        if sampler:
+            return '<texture texture="'+sampler+'" texcoord="UVMap"/>'
+        else:
+            factor = tex_or_factor['factor']
+            return '<color>' + strarr([factor, factor, factor, factor]) + '</color>'
+
     def get_mesh(self, depsgraph, node):
 
         # get a mesh for this node
@@ -253,13 +397,12 @@ class DaeExporter:
         # force triangulation if the mesh has polygons with more than 4 sides
         # corrupts custom normals
         force_triangluation = False
-        if not self.triangulate:
-            for polygon in mesh.polygons:
-                if (polygon.loop_total > 4):
-                    force_triangluation = True
-                    break
+        for polygon in mesh.polygons:
+            if (polygon.loop_total > 4):
+                force_triangluation = True
+                break
 
-        if (self.triangulate or force_triangluation):
+        if (force_triangluation):
             bm = bmesh.new()
             bm.from_mesh(mesh)
             bmesh.ops.triangulate(bm, faces=bm.faces)
@@ -494,14 +637,16 @@ class DaeExporter:
             if (mesh):
                 if not self.node_has_morphs(node):
                     mesh_id = self.gen_unique_id(node.data.name)
-                    material_bind = self.export_mesh(mesh, mesh_id, node.data.name)
+                    material_bind = self.export_mesh(
+                        mesh, mesh_id, node.data.name)
 
                     # export convex hull if needed by physics scene
 
                     if (self.node_has_convex_hull(node)):
                         convex_mesh = self.mesh_to_convex_hull(mesh)
                         convex_mesh_id = mesh_id + "-convex"
-                        self.export_mesh(convex_mesh, convex_mesh_id, node.data.name, True)
+                        self.export_mesh(
+                            convex_mesh, convex_mesh_id, node.data.name, True)
                         lookup["convex_mesh"][node] = convex_mesh_id
 
                     morphs = None
@@ -645,18 +790,19 @@ class DaeExporter:
         self.writel(
             S_MORPH, 4, '<input source="' + self.ref_id(source_weights_id)+'" semantic="MORPH_WEIGHT"/>')
         self.writel(S_MORPH, 3, '</targets>')
-        
+
         # Extension for allowing morph controller animation
         # https://www.khronos.org/collada/wiki/Morph_weights_KHR_extension
 
         self.writel(S_MORPH, 3, '<extra>')
         self.writel(S_MORPH, 4, '<technique profile="KHR">')
-        self.writel(S_MORPH, 5,'<morph_weights sid="MORPH_WEIGHT_TO_TARGET" count="'+str(len(morph_targets)-1)+'">')
+        self.writel(S_MORPH, 5, '<morph_weights sid="MORPH_WEIGHT_TO_TARGET" count="' +
+                    str(len(morph_targets)-1)+'">')
         self.writel(S_MORPH, 6, warr)
-        self.writel(S_MORPH, 5,'</morph_weights>')
+        self.writel(S_MORPH, 5, '</morph_weights>')
         self.writel(S_MORPH, 4, '</technique>')
         self.writel(S_MORPH, 3, '</extra>')
-        
+
         self.writel(S_MORPH, 2, '</morph>')
         self.writel(S_MORPH, 1, '</controller>')
 
@@ -997,7 +1143,7 @@ class DaeExporter:
         for mat_index, polygons in surface_v_indices.items():
 
             # Triangle Lists
-            triangulated = self.triangulate or not next(
+            triangulated = not next(
                 (p for p in polygons if len(p) != 3), False)
             if (triangulated):
                 prim_type = "triangles"
@@ -1362,7 +1508,8 @@ class DaeExporter:
         self.writel(S_GEOM, 3, '<source id="' +
                     source_interpolations_id + '">')
         interpolation_values = " ".join([str(x) for x in interps])
-        array_interpolations_id = self.gen_unique_id(spline_id + '-interpolations-array')
+        array_interpolations_id = self.gen_unique_id(
+            spline_id + '-interpolations-array')
         self.writel(S_GEOM, 4, '<Name_array id="'+array_interpolations_id + '" count="' +
                     str(len(interps)) + '">' + interpolation_values + '</Name_array>')
         self.writel(S_GEOM, 4, '<technique_common>')
@@ -1603,7 +1750,7 @@ class DaeExporter:
         self.writel(section, il + 2, '</technique_common>')
         self.writel(section, il + 1, '</bind_material>')
 
-    def export_materials(self, lookup):
+    def export_materials(self, depsgraph, lookup):
 
         # get materials for export
         materials = {
@@ -1617,7 +1764,7 @@ class DaeExporter:
         for mat in materials:
             effect_id = self.gen_unique_id(mat.name + "-effect")
             lookup["effect"][mat] = effect_id
-            self.export_effect(mat, effect_id)
+            self.export_effect(mat, effect_id, lookup)
 
         # export library_materials content
         for mat in materials:
@@ -1962,8 +2109,9 @@ class DaeExporter:
     def export_animation_blends(self, target, action_name, keys):
 
         frame_total = len(keys)
-        target_weight=target[target.find(":")+1:]
-        anim_id = self.gen_unique_id(action_name +"-"+ target_weight[:target_weight.find("/")]+"-"+target[:target.find(":")])
+        target_weight = target[target.find(":")+1:]
+        anim_id = self.gen_unique_id(
+            action_name + "-" + target_weight[:target_weight.find("/")]+"-"+target[:target.find(":")])
 
         self.writel(S_ANIM, 1, '<animation id="' + anim_id + '">')
 
@@ -2082,7 +2230,8 @@ class DaeExporter:
         if (self.transform_matrix_scale):
             source_scale_id = self.gen_unique_id(anim_id + '-scale-output')
             self.writel(S_ANIM, 2, '<source id="' + source_scale_id + '">')
-            array_scale_id = self.gen_unique_id(anim_id + '-scale-output-array')
+            array_scale_id = self.gen_unique_id(
+                anim_id + '-scale-output-array')
             self.writel(S_ANIM, 3, '<float_array id="' + array_scale_id+'" count="' +
                         str(frame_total * 3) + '">' + source_scale + '</float_array>')
             self.writel(S_ANIM, 3, '<technique_common>')
@@ -2125,8 +2274,10 @@ class DaeExporter:
         if (self.transform_matrix_scale):
             sample_scale_id = self.gen_unique_id(anim_id + '-scale-sampler')
             self.writel(S_ANIM, 2, '<sampler id="' + sample_scale_id + '">')
-            self.writel(S_ANIM, 3, '<input semantic="INPUT" source="' + self.ref_id(source_input_id)+'"/>')
-            self.writel(S_ANIM, 3, '<input semantic="OUTPUT" source="' + self.ref_id(source_scale_id) +'"/>')
+            self.writel(S_ANIM, 3, '<input semantic="INPUT" source="' +
+                        self.ref_id(source_input_id)+'"/>')
+            self.writel(S_ANIM, 3, '<input semantic="OUTPUT" source="' +
+                        self.ref_id(source_scale_id) + '"/>')
             self.writel(S_ANIM, 3, '<input semantic="INTERPOLATION" source="' +
                         self.ref_id(source_interpolation_id) + '"/>')
             self.writel(S_ANIM, 2, '</sampler>')
@@ -2179,21 +2330,22 @@ class DaeExporter:
 
     def cache_scene(self, xform_cache, blend_cache, key, lookup):
         # only animate a morph controller once, even if instanced by multiple nodes
-        morph_controller_crumb=set()
+        morph_controller_crumb = set()
         for orig_node in self.visual_nodes:
             node_id = lookup["nodes"][orig_node]
             node = orig_node.evaluated_get(
                 bpy.context.evaluated_depsgraph_get())
-            
+
             if orig_node in lookup["node_to_morph_controller"]:
                 morph_id = lookup["node_to_morph_controller"][orig_node]
-            
+
                 if not morph_id in morph_controller_crumb:
                     morph_controller_crumb.add(morph_id)
-            
+
                     for i in range(1, len(node.data.shape_keys.key_blocks)):
-                        key_name=node.data.shape_keys.key_blocks[i].name
-                        target =key_name+":"+ morph_id + "/MORPH_WEIGHT_TO_TARGET("+str(i-1)+")"
+                        key_name = node.data.shape_keys.key_blocks[i].name
+                        target = key_name+":" + morph_id + \
+                            "/MORPH_WEIGHT_TO_TARGET("+str(i-1)+")"
                         if (not (target in blend_cache)):
                             blend_cache[target] = []
                         self.append_morph_keyframe_if_different(
@@ -2431,7 +2583,8 @@ class DaeExporter:
     def export_animations(self, lookup):
 
         if self.config["use_anim_timeline"]:
-            timeline_anim_id = self.gen_unique_id(self.bpy_context_scene.name + "-timeline")
+            timeline_anim_id = self.gen_unique_id(
+                self.bpy_context_scene.name + "-timeline")
             self.export_timeline(timeline_anim_id, self.bpy_context_scene.frame_start,
                                  self.bpy_context_scene.frame_end, lookup)
 
@@ -2551,7 +2704,7 @@ class DaeExporter:
                 self.rest_scene()
                 depsgraph = bpy.context.evaluated_depsgraph_get()
 
-                self.export_materials(lookup)
+                self.export_materials(depsgraph, lookup)
                 self.export_meshes(depsgraph, lookup)
                 self.export_cameras(lookup)
                 self.export_lights(lookup)
@@ -2618,8 +2771,9 @@ class DaeExporter:
             scene = bpy.context.scene
             f.write(bytes('\t<instance_visual_scene url="' +
                           self.ref_id(scene.name) + '"/>\n', "UTF-8"))
-            f.write(bytes('\t<instance_physics_scene url="' +
-                          self.ref_id(scene.name) + '-physics' + '"/>\n', "UTF-8"))
+            if (self.bpy_context_scene.rigidbody_world):
+                f.write(bytes('\t<instance_physics_scene url="' +
+                        self.ref_id(scene.name) + '-physics' + '"/>\n', "UTF-8"))
             f.write(bytes('</scene>\n', "UTF-8"))
             f.write(bytes('</COLLADA>\n', "UTF-8"))
         finally:
@@ -2637,7 +2791,6 @@ class DaeExporter:
         self.node_ids = set()
         self.transform_matrix_scale = self.config["transform_type"] == 'MATRIX_SCALE'
         self.image_cache = set()
-        self.triangulate = False
         self.axis_type = self.config['axis_type']
         self.use_tangents = self.config['calc_tangents']
         self.overstuff_bones = False

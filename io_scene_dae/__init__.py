@@ -110,8 +110,7 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
         description="Style of animation clips",
         default='NONE',
     )
-
-    @property
+    
     def check_extension(self):
         return True  # return self.batch_mode == 'OFF'
 
