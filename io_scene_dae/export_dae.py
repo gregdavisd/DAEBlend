@@ -207,7 +207,7 @@ class DaeExporter:
         if material.use_nodes:
             self.export_nodes_effect(material, effect_id, lookup)
         else:
-            self.export_generic_effect(material, effect_id, lookup)
+            self.export_generic_effect(material, effect_id)
 
     def export_generic_effect(self, material, effect_id):
         self.writel(S_FX, 1, '<effect id="' + effect_id +
