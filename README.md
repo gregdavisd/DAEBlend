@@ -2,11 +2,7 @@
 Python script to export Collada Version 1.5 DAE files from Blender. Blender already has a builtin Collada exporter
 but it's not an easily modifiable Python script addon.
 
-Download link: 
-
-https://minhaskamal.github.io/DownGit/#/home?url=https://github.com/gregdavisd/DAEBlend/tree/master/io_scene_dae
-
-Extract the 'io_scene_dae' folder from the zip into the Blender addons folder:
+Extract the 'io_scene_dae' folder from the repositor into the Blender addons folder:
 \Program Files\Blender Foundation\Blender N.nn\N.nn\scripts\addons
 
 (N.nn) is the version of Blender installed.
