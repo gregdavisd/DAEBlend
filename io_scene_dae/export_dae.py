@@ -142,11 +142,29 @@ class DaeExporter:
     def writel(self, section, indent, text):
         if (section not in self.sections):
             self.sections[section] = []
+            self.section_indent[section] = 1
+        
+        indent = self.section_indent[section]
+
+        endtags = text.count("</")
+        opentags = text.count("<") - endtags - text.count("/>")
+        shift = opentags - endtags
+
+        if shift < 0:
+            indent += shift
+            indent = max(indent, 0)
+
         line = ""
         for x in range(indent):
             line += " "
         line += text
         self.sections[section].append(line)
+
+        if shift > 0:
+            indent += shift
+            indent = max(indent, 0)
+        
+        self.section_indent[section] = indent
 
     def clean_path(self, pathname):
         p = pathname.replace("\\", "/")
@@ -179,8 +197,7 @@ class DaeExporter:
 
         # the file path should be surrounded by <ref> tags
 
-        xml_path = os.path.join(
-            "./", os.path.relpath(save_path, os.path.dirname(self.path))).replace("\\", "/")
+        xml_path = os.path.join("./", os.path.relpath(save_path, os.path.dirname(self.path))).replace("\\", "/")
         self.writel(S_IMGS, 2, '<init_from><ref>' + xml_path + '</ref></init_from>')
         self.writel(S_IMGS, 1, '</image>')
 
@@ -886,8 +903,8 @@ class DaeExporter:
         self.writel(S_SKIN, 4, '<input semantic="INV_BIND_MATRIX" source="' + self.ref_id(source_bind_poses_id)+'"/>')
         self.writel(S_SKIN, 3, '</joints>')
         self.writel(S_SKIN, 3, '<vertex_weights count="' + str(len(weight_counts)) + '">')
-        self.writel(S_SKIN, 4, '<input semantic="JOINT" source="' + self.ref_id(source_joints_id) + '" offset=0/>')
-        self.writel(S_SKIN, 4, '<input semantic="WEIGHT" source="' + self.ref_id(source_skin_weights_id) + '" offset=1/>')
+        self.writel(S_SKIN, 4, '<input semantic="JOINT" source="' + self.ref_id(source_joints_id) + '" offset="0"/>')
+        self.writel(S_SKIN, 4, '<input semantic="WEIGHT" source="' + self.ref_id(source_skin_weights_id) + '" offset="1"/>')
         self.writel(S_SKIN, 4, '<vcount>' + " ".join([str(c) for c in weight_counts]) + '</vcount>')
         self.writel(S_SKIN, 4, '<v>' + " ".join([str(i) for v in vertex_weights for g in v for i in g]) + '</v>')
         self.writel(S_SKIN, 3, '</vertex_weights>')
@@ -2544,7 +2561,7 @@ class DaeExporter:
 
             f.write(bytes('<scene>\n', "UTF-8"))
             scene = bpy.context.scene
-            f.write(bytes('\t<instance_visual_scene url="' + self.ref_id(scene.name) + '"/>\n', "UTF-8"))
+            f.write(bytes(' <instance_visual_scene url="' + self.ref_id(scene.name) + '"/>\n', "UTF-8"))
             if (self.has_physics):
                 f.write(bytes('\t<instance_physics_scene url="' + self.ref_id(scene.name) + '-physics' + '"/>\n', "UTF-8"))
             f.write(bytes('</scene>\n', "UTF-8"))
@@ -2569,6 +2586,8 @@ class DaeExporter:
         self.triangulate = self.config['triangulate']
         self.overstuff_bones = False
         self.use_active_layers = False
+
+        self.section_indent = dict()
 
 def save(operator, context,
          filepath="",
