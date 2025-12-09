@@ -38,14 +38,14 @@ bl_info = {
     "category": "Import-Export"}
 
 if "bpy" in locals():
-    import imp
+    import importlib
     if "export_dae" in locals():
-        imp.reload(export_dae)
+        importlib.reload(export_dae)
 
 
 class ExportDAE(bpy.types.Operator, ExportHelper):
     '''Export to DAE'''
-    bl_idname = "export_scene.dae"
+    bl_idname = "export_scene.dae_blend"
     bl_label = "Export DAE"
     bl_options = {'PRESET'}
 
@@ -65,11 +65,20 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
         name="Coordinates",
         items=(('ZUP', "Z-Up (Blender)", "Z-Up axis, right handed"),
                ('YUPR', "Y-Up (OpenGL)", "Y-Up axis, right handed"),
-               ('YUPL', "Y-Up (DirectX)",
-                "Y-Up axis, left handed, Z-axis will be reflected")
+               ('YUPL', "Y-Up (DirectX)", "Y-Up axis, left handed, Z-axis will be reflected")
                ),
         description="Adjust up axis. All geometry data is adjusted to the specified coordinate system.",
-        default='YUPR',
+        default='ZUP',
+    )
+
+    version: EnumProperty(
+        name="Collada Version",
+        items=(('141', "Collada 1.4.1", ""),
+               ('150', "Collada 1.5.0", ""),
+               ('141SL', "Second Life 1.4.1", "")
+               ),
+        description="Collada version to export the file as.",
+        default='141SL',
     )
 
     transform_type: EnumProperty(
@@ -86,6 +95,12 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
     calc_tangents: BoolProperty(
         name="Tangents",
         description="Generate tangents for vertices. Used for bump mapping.",
+        default=False,
+    )
+
+    triangulate: BoolProperty(
+        name="Triangulate",
+        description="Force triangulation of all faces.",
         default=False,
     )
 
@@ -110,7 +125,7 @@ class ExportDAE(bpy.types.Operator, ExportHelper):
         description="Style of animation clips",
         default='NONE',
     )
-    
+
     def check_extension(self):
         return True  # return self.batch_mode == 'OFF'
 
